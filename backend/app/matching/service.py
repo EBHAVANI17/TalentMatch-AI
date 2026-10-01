@@ -84,6 +84,16 @@ def _hash(*parts) -> str:
 # ---------------------------------------------------------------------------
 # Persisted matches
 # ---------------------------------------------------------------------------
+def _inputs_hash(job: Job, cand: CandidateProfile, emb_hashes: dict, weights_hash: str) -> str:
+    """Everything a score depends on. A different hash means the stored match is stale."""
+    return _hash(
+        ENGINE_VERSION, weights_hash,
+        job.updated_at, emb_hashes.get(("job", job.id)), job.required_skills_json, job.preferred_skills_json,
+        cand.updated_at, cand.skills_json, emb_hashes.get(("candidate", cand.id)),
+        len(cand.certifications), len(cand.work_experiences),
+    )
+
+
 def _store(row: Match, result: MatchResult, inputs: str, weights_hash: str) -> None:
     row.score = result.score
     row.fit_level = result.fit_level
@@ -119,12 +129,9 @@ def ensure_matches(db: Session, job: Job, candidates: Iterable[CandidateProfile]
     existing = {m.candidate_id: m for m in db.query(Match).filter(
         Match.job_id == job.id, Match.candidate_id.in_([c.id for c in candidates]))}
 
-    # Embedding text is part of the inputs, so only vectors that are needed get loaded.
-    job_key = (job.updated_at, emb_hashes.get(("job", job.id)), job.required_skills_json, job.preferred_skills_json)
     stale = []
     for c in candidates:
-        inputs = _hash(ENGINE_VERSION, weights_hash, job_key, c.updated_at, c.skills_json,
-                       emb_hashes.get(("candidate", c.id)), len(c.certifications), len(c.work_experiences))
+        inputs = _inputs_hash(job, c, emb_hashes, weights_hash)
         row = existing.get(c.id)
         if force or row is None or row.inputs_hash != inputs:
             stale.append((c, inputs))
@@ -142,6 +149,49 @@ def ensure_matches(db: Session, job: Job, candidates: Iterable[CandidateProfile]
                             job_id=job.id, candidate_id=c.id, status="new")
                 db.add(row)
                 existing[c.id] = row
+            _store(row, result, inputs, weights_hash)
+        db.flush()
+    return existing
+
+
+def ensure_matches_for_candidate(db: Session, candidate: CandidateProfile, jobs: Iterable[Job]) -> Dict[str, Match]:
+    """One candidate against many jobs in a single pass (Jobs for you). Keyed by job id. Caller commits."""
+    jobs = list(jobs)
+    if not jobs:
+        return {}
+    graph = get_skill_graph(db)
+    model = get_embedder().name
+    emb_hashes = {
+        (e.entity_type, e.entity_id): e.content_hash
+        for e in db.query(Embedding.entity_type, Embedding.entity_id, Embedding.content_hash).filter(
+            Embedding.model == model, Embedding.entity_id.in_([candidate.id, *(j.id for j in jobs)]))
+    }
+    existing = {m.job_id: m for m in db.query(Match).filter(
+        Match.candidate_id == candidate.id, Match.job_id.in_([j.id for j in jobs]))}
+    orgs = {j.organization_id: j.organization for j in jobs}
+    weights_by_org = {org_id: get_weights(org) for org_id, org in orgs.items()}
+
+    stale = []
+    for job in jobs:
+        weights = weights_by_org[job.organization_id]
+        weights_hash = _hash(json.dumps(weights, sort_keys=True))[:16]
+        inputs = _inputs_hash(job, candidate, emb_hashes, weights_hash)
+        row = existing.get(job.id)
+        if row is None or row.inputs_hash != inputs:
+            stale.append((job, inputs, weights, weights_hash))
+
+    if stale:
+        cand_vec = embeddings.vectors_for(db, "candidate", [candidate.id]).get(candidate.id)
+        job_vecs = embeddings.vectors_for(db, "job", [j.id for j, *_ in stale])
+        facts = candidate_facts(candidate)
+        for job, inputs, weights, weights_hash in stale:
+            result = score_match(facts, job_facts(job), graph, weights, embeddings.cosine(job_vecs.get(job.id), cand_vec))
+            row = existing.get(job.id)
+            if row is None:
+                row = Match(id=f"match_{uuid.uuid4().hex[:16]}", organization_id=job.organization_id,
+                            job_id=job.id, candidate_id=candidate.id, status="new")
+                db.add(row)
+                existing[job.id] = row
             _store(row, result, inputs, weights_hash)
         db.flush()
     return existing

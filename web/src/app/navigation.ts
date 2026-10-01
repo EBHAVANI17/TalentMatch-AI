@@ -1,4 +1,4 @@
-import { Briefcase, Home, LayoutDashboard, UserRound, Users, UsersRound, type LucideIcon } from "lucide-react";
+import { Briefcase, Home, LayoutDashboard, Sparkles, UserRound, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { User } from "@/lib/api/types";
 import { isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
 
@@ -19,7 +19,9 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, visible: hiringTeam },
   { to: "/", label: "Home", icon: Home, visible: isCandidate },
   { to: "/jobs", label: "Jobs", icon: Briefcase, visible: hiringTeam },
+  { to: "/talent-match", label: "Talent Match", icon: Sparkles, visible: hiringTeam },
   { to: "/candidates", label: "Candidates", icon: UsersRound, visible: hiringTeam },
+  { to: "/jobs-for-you", label: "Jobs for you", icon: Sparkles, visible: isCandidate },
   { to: "/profile", label: "My profile", icon: UserRound, visible: isCandidate },
   { to: "/team", label: "Team", icon: Users, visible: (u) => isOrgAdmin(u) || isSuperAdmin(u) },
 ];

@@ -19,7 +19,7 @@ The new workspace is being built screen by screen next to the classic UI.
 | URL | What |
 |-----|------|
 | `/` | Classic UI (`frontend/index.html`), still the main workspace |
-| `/app` | New workspace (`web/`): sign-in and account pages, Dashboard, Jobs, Candidates, My profile, Team |
+| `/app` | New workspace (`web/`): sign-in and account pages, Dashboard, Jobs, Talent Match, Candidates, Search, My profile, Jobs for you, Team |
 
 Both share the same session (`nexus-token` in localStorage), so you can move between them.
 
@@ -156,3 +156,28 @@ an organization can open them only for candidates who applied to it or that it a
 Default stages: Applied, Screening, Shortlisted, Interview, Selected, Hired, Rejected. Organization
 admins can customize them (`PUT /api/v1/pipeline/stages`). Older names (AI Screened, Interviewing,
 Assessment, Offered) are accepted as aliases.
+
+## Matching and search
+
+Code lives in `backend/app/matching/` (engine, ontology, embeddings, redaction) and `backend/app/search/`.
+
+- **Engine** (`matching/engine.py`): pure functions over `CandidateFacts`/`JobFacts`, which
+  deliberately contain no names, contact details, photos, age or gender. Ten factors, each with a
+  score, a weight and a reason; factors without data are excluded and the remaining weights
+  renormalized. The total is exactly the weighted sum that the UI shows. Bump `ENGINE_VERSION` when
+  scoring logic changes so stored matches are recomputed.
+- **Weights**: platform defaults in `DEFAULT_WEIGHTS`; organizations override them with
+  `PUT /api/v1/matching/weights`.
+- **Skill ontology** (`db/reference_data.py`): catalog skills, synonyms and directional related-skill
+  credit. Loaded on every startup (insert-only). Edit there, or add rows to `skill_aliases` /
+  `skill_relations`.
+- **Embeddings**: `EMBEDDING_PROVIDER=fastembed` (local model `BAAI/bge-small-en-v1.5`, 384-d, cached
+  in `backend/.cache/fastembed`, baked into the Docker image) or `hashing` (tests/offline). Text is
+  passed through `matching/redaction.py` first. Vectors refresh through events; unchanged text is skipped.
+- **Stored matches**: `matches` rows are recomputed only when their `inputs_hash` changes (profile,
+  job, embeddings, weights or engine version).
+- **Search**: `GET /api/v1/search?q=` parses experience, location, work mode and skills from plain
+  language (`interpreted` in the response), then fuses semantic, skill and keyword rankings within the
+  caller's tenant scope.
+
+Run the real-model test with `RUN_MODEL_TESTS=1 python -m pytest tests/test_embeddings.py` (downloads ~70 MB once).

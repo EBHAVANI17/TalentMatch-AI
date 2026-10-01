@@ -139,3 +139,15 @@ def test_publishing_a_job_notifies_team_about_matching_talent(client, auth):
         team = db.query(Notification).filter(Notification.event_id == event.id, Notification.user_id == "usr_rec_anthropic").one()
         assert "potentially relevant candidates" in team.title
         assert db.query(Match).filter(Match.job_id == res.json()["id"]).count() >= 3
+
+
+def test_both_batch_paths_agree_and_do_not_recompute_each_other(client, auth):
+    """Recruiter view (job x many) and candidate view (candidate x many) share stored matches."""
+    client.get(URL, headers=auth("anthropic"))
+    with SessionLocal() as db:
+        before = db.query(Match).filter(Match.job_id == "job_001", Match.candidate_id == "cand_001").one()
+        stamp, score = before.computed_at, before.score
+    items = {i["job"]["id"]: i for i in client.get("/api/v1/matching/me/jobs", headers=auth("aarav")).json()}
+    assert items["job_001"]["match"]["score"] == score
+    with SessionLocal() as db:
+        assert db.query(Match).filter(Match.job_id == "job_001", Match.candidate_id == "cand_001").one().computed_at == stamp

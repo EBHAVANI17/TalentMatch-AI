@@ -312,9 +312,10 @@ def my_job_matches(
         raise HTTPException(status_code=403, detail="Job matches are for candidates")
     jobs = db.query(Job).filter(Job.status == "Active").all()
     apps = {a.job_id: a for a in db.query(Application).filter(Application.candidate_id == cand.id)}
+    rows = matching.ensure_matches_for_candidate(db, cand, jobs)
     items = []
     for job in jobs:
-        row = matching.ensure_matches(db, job, [cand])[cand.id]
+        row = rows[job.id]
         if row.score >= min_score:
             app = apps.get(job.id)
             items.append(JobMatchItem(job=get_job_out(job), match=_detail(row), applied=app is not None,

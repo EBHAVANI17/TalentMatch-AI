@@ -345,7 +345,7 @@ def score_match(
     if missing_required:
         gaps.append(f"Missing required skills: {', '.join(missing_required)}")
     gaps += [f"{f.label}: {f.detail}" for f in sorted(factors, key=lambda f: f.weight, reverse=True)
-             if f.applicable and f.weight > 0 and (f.score or 0) <= 0.5 and f.key != "skills"][:3]
+             if f.applicable and f.weight > 0 and (f.score or 0) < 0.5 and f.key != "skills"][:3]
 
     level = fit_level(score)
     top = ", ".join(f.label.lower() for f in ranked[:2]) or "the available information"

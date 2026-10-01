@@ -8,10 +8,11 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  size?: "md" | "lg";
 }
 
 /** Accessible dialog built on the native <dialog> element (focus trap, Esc to close). */
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, size = "md" }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -41,7 +42,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
       onClick={(e) => {
         if (e.target === ref.current) onClose(); // click on backdrop
       }}
-      className="m-auto w-[min(92vw,480px)] rounded-xl border border-border bg-surface p-0 text-fg shadow-card backdrop:bg-black/40"
+      className={`m-auto ${size === "lg" ? "w-[min(94vw,760px)]" : "w-[min(92vw,480px)]"} max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-surface p-0 text-fg shadow-card backdrop:bg-black/40`}
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 id={titleId} className="font-display text-base font-semibold">

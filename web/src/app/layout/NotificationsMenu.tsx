@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { EmptyState, ErrorState, Spinner, cn } from "@/components/ui";
@@ -13,6 +14,7 @@ export function NotificationsMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: NOTIFICATIONS_KEY,
@@ -71,7 +73,13 @@ export function NotificationsMenu() {
                   <li key={n.id}>
                     <button
                       type="button"
-                      onClick={() => !n.is_read && markRead.mutate(n.id)}
+                      onClick={() => {
+                        if (!n.is_read) markRead.mutate(n.id);
+                        if (n.link?.startsWith("/app/")) {
+                          setOpen(false);
+                          navigate(n.link.slice(4)); // links are stored with the /app base path
+                        }
+                      }}
                       className={cn(
                         "flex w-full flex-col gap-0.5 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-surface-2",
                         !n.is_read && "bg-primary-soft/40",

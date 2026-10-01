@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Copy, Pause, Pencil, Send, XCircle } from "lucide-react";
+import { Archive, Copy, Pause, Pencil, Send, Sparkles, XCircle } from "lucide-react";
 import {
   Badge, Button, ButtonLink, Card, CardBody, CardHeader, ConfirmDialog, EmptyState, ErrorState, FullPageSpinner,
   PageHeader, Select, useToast,
@@ -82,6 +82,11 @@ export function JobDetailPage() {
         }
         actions={
           <>
+            {j.status === "Active" && (
+              <ButtonLink to={`/talent-match?job=${j.id}`}>
+                <Sparkles className="size-4" aria-hidden /> Find matches
+              </ButtonLink>
+            )}
             {j.status !== "Archived" && (
               <ButtonLink to={`/jobs/${j.id}/edit`} variant="secondary">
                 <Pencil className="size-4" aria-hidden /> Edit

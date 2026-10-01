@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, Moon, Search, Sun } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { roleLabel } from "@/lib/auth/roles";
 import { applyTheme, getInitialTheme, type Theme } from "@/lib/theme";
@@ -82,10 +83,50 @@ function UserMenu() {
   );
 }
 
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+
+  // "/" focuses search from anywhere (except while typing in a field)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) && !target.isContentEditable) {
+        e.preventDefault();
+        input.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+  }
+
+  return (
+    <form role="search" onSubmit={onSubmit} className="relative w-full max-w-md">
+      <label htmlFor="global-search" className="sr-only">Search</label>
+      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
+      <input
+        id="global-search"
+        ref={input}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search candidates, jobs, skills"
+        className="h-9 w-full rounded-lg border border-border bg-surface-2 pl-9 pr-8 text-sm text-fg placeholder:text-muted focus:border-primary focus:bg-surface focus:outline-none"
+      />
+      <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-border px-1.5 text-[10px] text-muted sm:block">/</kbd>
+    </form>
+  );
+}
+
 export function Header({ leading }: { leading?: ReactNode }) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
-      <div className="flex items-center gap-2">{leading}</div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">{leading}<GlobalSearch /></div>
       <div className="flex items-center gap-1">
         <NotificationsMenu />
         <ThemeToggle />
