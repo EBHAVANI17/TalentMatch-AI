@@ -1,0 +1,290 @@
+from typing import List, Dict
+
+SKILL_TAXONOMY: List[Dict] = [
+    {"name": "Python", "category": "Languages", "demand_level": "Very High", "avg_salary_boost": "+18%"},
+    {"name": "TypeScript", "category": "Languages", "demand_level": "Very High", "avg_salary_boost": "+20%"},
+    {"name": "Rust", "category": "Languages", "demand_level": "Very High", "avg_salary_boost": "+28%"},
+    {"name": "Go", "category": "Languages", "demand_level": "Very High", "avg_salary_boost": "+22%"},
+    {"name": "Java", "category": "Languages", "demand_level": "High", "avg_salary_boost": "+15%"},
+    {"name": "C++", "category": "Languages", "demand_level": "High", "avg_salary_boost": "+25%"},
+    {"name": "SQL", "category": "Languages", "demand_level": "Very High", "avg_salary_boost": "+14%"},
+    {"name": "React", "category": "Frameworks", "demand_level": "Very High", "avg_salary_boost": "+18%"},
+    {"name": "Next.js", "category": "Frameworks", "demand_level": "Very High", "avg_salary_boost": "+22%"},
+    {"name": "FastAPI", "category": "Frameworks", "demand_level": "Very High", "avg_salary_boost": "+19%"},
+    {"name": "Node.js", "category": "Frameworks", "demand_level": "High", "avg_salary_boost": "+16%"},
+    {"name": "PyTorch", "category": "Data & AI", "demand_level": "Very High", "avg_salary_boost": "+32%"},
+    {"name": "LLMs & RAG", "category": "Data & AI", "demand_level": "Extremely High", "avg_salary_boost": "+35%"},
+    {"name": "Vector Databases", "category": "Data & AI", "demand_level": "Very High", "avg_salary_boost": "+25%"},
+    {"name": "CUDA & GPU Optimization", "category": "Data & AI", "demand_level": "Extremely High", "avg_salary_boost": "+40%"},
+    {"name": "PostgreSQL & pgvector", "category": "Data & AI", "demand_level": "Very High", "avg_salary_boost": "+18%"},
+    {"name": "Distributed Systems", "category": "Architecture", "demand_level": "Extremely High", "avg_salary_boost": "+30%"},
+    {"name": "System Design", "category": "Architecture", "demand_level": "Very High", "avg_salary_boost": "+24%"},
+    {"name": "Microservices", "category": "Architecture", "demand_level": "High", "avg_salary_boost": "+15%"},
+    {"name": "Kubernetes", "category": "Cloud & DevOps", "demand_level": "Very High", "avg_salary_boost": "+22%"},
+    {"name": "AWS", "category": "Cloud & DevOps", "demand_level": "Very High", "avg_salary_boost": "+18%"},
+    {"name": "Terraform", "category": "Cloud & DevOps", "demand_level": "High", "avg_salary_boost": "+16%"},
+    {"name": "Docker", "category": "Cloud & DevOps", "demand_level": "Very High", "avg_salary_boost": "+15%"},
+    {"name": "CI/CD & GitOps", "category": "Cloud & DevOps", "demand_level": "High", "avg_salary_boost": "+14%"}
+]
+
+SEED_CANDIDATES: List[Dict] = [
+    {
+        "id": "cand_001",
+        "name": "Aarav Sharma",
+        "title": "Staff AI Infrastructure & LLM Systems Engineer",
+        "email": "aarav.sharma@nexus-ai.dev",
+        "github": "https://github.com/aarav-sharma-ai",
+        "linkedin": "https://linkedin.com/in/aarav-sharma-ml",
+        "portfolio": "https://aaravsharma.io",
+        "skills": ["Python", "PyTorch", "LLMs & RAG", "CUDA & GPU Optimization", "Vector Databases", "FastAPI", "Docker", "Kubernetes", "PostgreSQL & pgvector"],
+        "experience_years": 6.0,
+        "location": "San Francisco, CA",
+        "remote_preference": "Remote",
+        "expected_salary": 185000,
+        "education": "Master's in Computer Science (Stanford)",
+        "ats_score": 96,
+        "profile_strength": 98,
+        "bio": "Specialized in high-throughput LLM inference, vLLM / TensorRT-LLM optimizations, distributed RAG vector indexing, and low-latency API architectures.",
+        "avatar_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
+        "featured_projects": [
+            {"name": "HyperRAG Engine", "desc": "Sub-20ms hybrid vector retrieval engine handling 50k QPS built with Python & pgvector."},
+            {"name": "Quantized-LLM-Server", "desc": "Custom 4-bit CUDA kernel inference runtime for Mistral & Llama 3 models."}
+        ]
+    },
+    {
+        "id": "cand_002",
+        "name": "Elena Rostova",
+        "title": "Principal Full Stack & Distributed Platform Architect",
+        "email": "elena.rostova@techvault.io",
+        "github": "https://github.com/elena-rostova",
+        "linkedin": "https://linkedin.com/in/elena-rostova",
+        "portfolio": "https://elenarostova.dev",
+        "skills": ["TypeScript", "Next.js", "React", "Node.js", "PostgreSQL & pgvector", "Distributed Systems", "AWS", "Docker", "Kubernetes", "Microservices"],
+        "experience_years": 7.5,
+        "location": "New York, NY",
+        "remote_preference": "Remote",
+        "expected_salary": 195000,
+        "education": "Bachelor's in Software Engineering (CMU)",
+        "ats_score": 94,
+        "profile_strength": 96,
+        "bio": "Architecting resilient multi-tenant enterprise platforms, real-time collaboration engines, and developer-first cloud applications serving millions of users.",
+        "avatar_url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80",
+        "featured_projects": [
+            {"name": "SyncEngine", "desc": "Real-time CRDT multi-user canvas collaboration engine built on Next.js and WebSockets."},
+            {"name": "CloudMesh Gateway", "desc": "Edge-routed GraphQL federation layer handling 120M daily requests."}
+        ]
+    },
+    {
+        "id": "cand_003",
+        "name": "Marcus Chen",
+        "title": "Senior Distributed Systems & Core Backend Engineer",
+        "email": "marcus.chen@distributed-systems.org",
+        "github": "https://github.com/marcus-chen-core",
+        "linkedin": "https://linkedin.com/in/marcus-chen-systems",
+        "portfolio": "https://marcuschen.me",
+        "skills": ["Go", "Rust", "Distributed Systems", "System Design", "Microservices", "PostgreSQL & pgvector", "Kubernetes", "Docker", "SQL"],
+        "experience_years": 5.0,
+        "location": "Seattle, WA",
+        "remote_preference": "Hybrid",
+        "expected_salary": 165000,
+        "education": "Bachelor's in Computer Engineering (UC Berkeley)",
+        "ats_score": 92,
+        "profile_strength": 94,
+        "bio": "Passionate about zero-downtime distributed consensus (Raft/Paxos), low-latency ledger backends, and lock-free concurrency.",
+        "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
+        "featured_projects": [
+            {"name": "RaftLite", "desc": "High-throughput distributed consensus engine implemented in Go with sub-millisecond heartbeat."},
+            {"name": "ChronosQueue", "desc": "Durable distributed message queue in Rust with zero-copy disk writes."}
+        ]
+    },
+    {
+        "id": "cand_004",
+        "name": "Sophia Vance",
+        "title": "Staff Cloud Platform & Site Reliability Engineer",
+        "email": "sophia.vance@cloudplatform.io",
+        "github": "https://github.com/sophia-vance-devops",
+        "linkedin": "https://linkedin.com/in/sophia-vance",
+        "portfolio": "https://sophiavance.dev",
+        "skills": ["AWS", "Kubernetes", "Terraform", "Docker", "CI/CD & GitOps", "Python", "Go", "Distributed Systems"],
+        "experience_years": 8.0,
+        "location": "Austin, TX",
+        "remote_preference": "Remote",
+        "expected_salary": 180000,
+        "education": "Bachelor's in Computer Science",
+        "ats_score": 95,
+        "profile_strength": 97,
+        "bio": "DevOps & SRE leader orchestrating global multi-cloud infrastructure, zero-trust security meshes, automated chaos engineering, and 99.999% uptime SLAs.",
+        "avatar_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80",
+        "featured_projects": [
+            {"name": "KubeAutoscale Operator", "desc": "Predictive ML-driven Kubernetes HPA operator saving 35% in AWS compute costs."}
+        ]
+    }
+]
+
+SEED_JOBS: List[Dict] = [
+    {
+        "id": "job_001",
+        "title": "Staff AI Infrastructure & Inference Engineer",
+        "company": "Anthropic AI",
+        "company_domain": "anthropic.com",
+        "company_logo": "✨",
+        "department": "Foundation AI Research",
+        "description": "Join our Core Systems team to scale large-scale generative model inference, build ultra-low-latency distributed RAG systems, and optimize GPU cluster throughput.",
+        "key_responsibilities": [
+            "Architect and optimize multi-GPU inference kernels using CUDA, PyTorch, and TensorRT.",
+            "Design distributed vector retrieval pipelines supporting billions of embeddings.",
+            "Collaborate with research scientists to productionize frontier reasoning models."
+        ],
+        "required_skills": ["Python", "PyTorch", "LLMs & RAG", "CUDA & GPU Optimization", "Vector Databases", "FastAPI"],
+        "preferred_skills": ["Kubernetes", "Docker", "PostgreSQL & pgvector", "Distributed Systems"],
+        "min_experience_years": 5.0,
+        "location": "San Francisco, CA",
+        "workplace_type": "Remote",
+        "salary_min": 180000,
+        "salary_max": 230000,
+        "equity": "0.1% - 0.25%",
+        "required_education": "Master's",
+        "urgency": "High",
+        "benefits": ["Unlimited PTO", "$10k Learning Stipend", "Top-tier Health/Dental/Vision", "Comprehensive 401(k) Match"],
+        "posted_date": "2026-09-22",
+        "applicants_count": 28,
+        "status": "Active"
+    },
+    {
+        "id": "job_002",
+        "title": "Principal Full Stack Cloud Platform Architect",
+        "company": "Vercel",
+        "company_domain": "vercel.com",
+        "company_logo": "▲",
+        "department": "Core Framework & Edge Infrastructure",
+        "description": "Architect next-generation edge rendering engines, high-performance Next.js primitives, and developer tooling trusted by millions of engineers globally.",
+        "key_responsibilities": [
+            "Spearhead architecture of Next.js edge runtimes and server actions.",
+            "Build zero-latency global state synchronization engines for web applications.",
+            "Lead and mentor senior engineering squads across full-stack distributed domains."
+        ],
+        "required_skills": ["TypeScript", "Next.js", "React", "Node.js", "Distributed Systems", "AWS"],
+        "preferred_skills": ["PostgreSQL & pgvector", "Docker", "Kubernetes", "Microservices"],
+        "min_experience_years": 6.0,
+        "location": "San Francisco, CA",
+        "workplace_type": "Remote",
+        "salary_min": 190000,
+        "salary_max": 240000,
+        "equity": "0.15% - 0.35%",
+        "required_education": "Bachelor's",
+        "urgency": "High",
+        "benefits": ["Work from anywhere worldwide", "Home Office Setup Grant ($5,000)", "Annual Team Retreats", "Parental Leave (16 Weeks)"],
+        "posted_date": "2026-09-24",
+        "applicants_count": 42,
+        "status": "Active"
+    },
+    {
+        "id": "job_003",
+        "title": "Lead Distributed Ledger & Systems Engineer",
+        "company": "Stripe",
+        "company_domain": "stripe.com",
+        "company_logo": "💳",
+        "department": "Global Financial Infrastructure",
+        "description": "Engineer zero-fault transactional ledgers, global clearing systems, and fault-tolerant financial pipelines processing trillions in gross volume annually.",
+        "key_responsibilities": [
+            "Build lock-free, ultra-durable transactional ledger services in Go and Rust.",
+            "Ensure sub-10ms P99 API latency across global multi-region deployments.",
+            "Implement automated formal verification and chaos engineering simulations."
+        ],
+        "required_skills": ["Go", "Rust", "Distributed Systems", "System Design", "PostgreSQL & pgvector", "Microservices"],
+        "preferred_skills": ["Kubernetes", "Docker", "SQL"],
+        "min_experience_years": 5.0,
+        "location": "Seattle, WA",
+        "workplace_type": "Remote",
+        "salary_min": 175000,
+        "salary_max": 225000,
+        "equity": "0.1% - 0.2%",
+        "required_education": "Bachelor's",
+        "urgency": "High",
+        "benefits": ["401(k) 100% Match up to 6%", "Wellness & Fitness Reimbursement", "Comprehensive Family Health Cover"],
+        "posted_date": "2026-09-20",
+        "applicants_count": 35,
+        "status": "Active"
+    },
+    {
+        "id": "job_004",
+        "title": "Staff Platform & Multi-Cloud Infrastructure Engineer",
+        "company": "Databricks",
+        "company_domain": "databricks.com",
+        "company_logo": "🧱",
+        "department": "Lakehouse Cloud Infrastructure",
+        "description": "Design resilient multi-cloud Kubernetes control planes, automated GitOps deployments, and infrastructure scaling across millions of compute cores.",
+        "key_responsibilities": [
+            "Orchestrate enterprise Kubernetes clusters across AWS, GCP, and Azure.",
+            "Standardize Terraform and GitOps automation for mission-critical platform components.",
+            "Drive SRE best practices, observability tooling, and automated remediation."
+        ],
+        "required_skills": ["AWS", "Kubernetes", "Terraform", "Docker", "CI/CD & GitOps", "Distributed Systems"],
+        "preferred_skills": ["Python", "Go"],
+        "min_experience_years": 7.0,
+        "location": "Austin, TX",
+        "workplace_type": "Remote",
+        "salary_min": 180000,
+        "salary_max": 235000,
+        "equity": "0.1% - 0.3%",
+        "required_education": "Bachelor's",
+        "urgency": "Medium",
+        "benefits": ["Generous Stock Options (Pre-IPO)", "Catered Lunches / DoorDash Allowance", "Full Medical Coverage"],
+        "posted_date": "2026-09-23",
+        "applicants_count": 19,
+        "status": "Active"
+    },
+    {
+        "id": "job_005",
+        "title": "Senior AI Database & Vector Engine Engineer",
+        "company": "Supabase",
+        "company_domain": "supabase.com",
+        "company_logo": "⚡",
+        "department": "Database Core & AI Extensions",
+        "description": "Scale open-source PostgreSQL, pgvector search acceleration, and serverless vector indexing for millions of AI developers worldwide.",
+        "key_responsibilities": [
+            "Contribute to pgvector performance optimization and HNSW indexing.",
+            "Build real-time vector streaming engines and embedding pipelines.",
+            "Engage directly with the open-source community to solve frontier database scaling challenges."
+        ],
+        "required_skills": ["Python", "PostgreSQL & pgvector", "Vector Databases", "FastAPI", "Docker"],
+        "preferred_skills": ["Rust", "PyTorch", "LLMs & RAG", "Distributed Systems"],
+        "min_experience_years": 4.0,
+        "location": "San Francisco, CA",
+        "workplace_type": "Remote",
+        "salary_min": 165000,
+        "salary_max": 210000,
+        "equity": "0.1% - 0.25%",
+        "required_education": "Bachelor's",
+        "urgency": "High",
+        "benefits": ["100% Remote Anywhere", "Flexible Hours", "Open Source Sponsorship", "Hardware Budget"],
+        "posted_date": "2026-09-25",
+        "applicants_count": 16,
+        "status": "Active"
+    }
+]
+
+INITIAL_APPLICATIONS: List[Dict] = [
+    {
+        "id": "app_001",
+        "candidate_id": "cand_001",
+        "job_id": "job_001",
+        "job_title": "Staff AI Infrastructure & Inference Engineer",
+        "company": "Anthropic AI",
+        "applied_date": "2026-09-23",
+        "match_score": 96,
+        "status": "Interview",
+        "cover_note": "Excited to apply my experience in vLLM / TensorRT-LLM and distributed vector indexing to Anthropic's core inference systems."
+    },
+    {
+        "id": "app_002",
+        "candidate_id": "cand_002",
+        "job_id": "job_002",
+        "job_title": "Principal Full Stack Cloud Platform Architect",
+        "company": "Vercel",
+        "applied_date": "2026-09-24",
+        "match_score": 95,
+        "status": "Offer",
+        "cover_note": "Passionate about edge runtimes and developer productivity. Built SyncEngine to power real-time collaborative state."
+    }
+]
