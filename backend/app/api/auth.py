@@ -1,23 +1,51 @@
+import json
 import uuid
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import (
-    hash_password, verify_password, create_access_token,
+    hash_password, verify_password, password_needs_rehash, create_access_token,
     get_current_user
 )
-from app.models.db_models import User, Organization, CandidateProfile
+from app.models.db_models import User, Organization, CandidateProfile, Plan
 from app.models.schemas import (
-    LoginRequest, TokenResponse, RegisterCandidateRequest,
-    RegisterEmployerRequest, UserOut
+    LoginRequest, TokenResponse, RegisterCandidateRequest, RegisterEmployerRequest, UserOut,
+    RefreshTokenRequest, TokenRequest, ForgotPasswordRequest, ResetPasswordRequest,
+    AcceptInvitationRequest, MessageResponse
 )
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
+from app.services import account_service
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access"])
 
 auth_rate_limit = Depends(rate_limit("auth", settings.rate_limit_auth))
+
+DEFAULT_SIGNUP_PLAN_ID = "free"
+
+
+def issue_session(db: Session, user: User, refresh_token: Optional[str] = None) -> TokenResponse:
+    """Access token (JWT) for API calls plus a rotating refresh token."""
+    token = create_access_token(data={"sub": user.id, "email": user.email, "role": user.role})
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=settings.access_token_expire_hours * 3600,
+        refresh_token=refresh_token or account_service.issue_refresh_token(db, user),
+        user=UserOut.model_validate(user)
+    )
+
+
+def ensure_email_available(db: Session, email: str) -> None:
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists"
+        )
+
 
 @router.post("/login", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
@@ -32,8 +60,18 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is suspended or deactivated"
         )
+    if settings.require_email_verification and not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please confirm your email address before signing in"
+        )
 
-    token = create_access_token(data={"sub": user.id, "email": user.email, "role": user.role})
+    # Upgrade old password hashes to the current work factor while we have the plaintext.
+    if password_needs_rehash(user.hashed_password):
+        user.hashed_password = hash_password(payload.password)
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
     log_audit_event(
         db=db,
         action="USER_LOGIN",
@@ -42,23 +80,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         entity_id=user.id,
         user_id=user.id,
         user_email=user.email,
+        organization_id=user.organization_id,
         details={"role": user.role}
     )
+    return issue_session(db, user)
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user=UserOut.model_validate(user)
-    )
 
 @router.post("/register/candidate", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
-        )
+    ensure_email_available(db, payload.email)
+    account_service.validate_password(payload.password)
 
     user_id = f"usr_cand_{uuid.uuid4().hex[:8]}"
     cand_profile_id = f"cand_{uuid.uuid4().hex[:8]}"
@@ -71,12 +102,12 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
         role="CANDIDATE",
         organization_id=None,
         avatar_url="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+        email_verified=False,
         is_active=True
     )
     db.add(user)
     db.flush()
 
-    import json
     profile = CandidateProfile(
         id=cand_profile_id,
         user_id=user_id,
@@ -95,7 +126,7 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(data={"sub": user.id, "email": user.email, "role": user.role})
+    account_service.send_verification_email(db, user)
     log_audit_event(
         db=db,
         action="CANDIDATE_REGISTERED",
@@ -106,29 +137,31 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
         user_email=user.email,
         details={"title": payload.title}
     )
+    return issue_session(db, user)
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user=UserOut.model_validate(user)
-    )
 
 @router.post("/register/employer", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email).first()
-    if existing:
+    ensure_email_available(db, payload.email)
+    account_service.validate_password(payload.password)
+    if db.query(Organization).filter(Organization.domain == payload.company_domain).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
+            detail="An organization with this domain already exists. Ask its admin for an invitation."
         )
 
+    # Self-serve organizations start on the free plan; upgrades go through billing.
+    plan = db.get(Plan, DEFAULT_SIGNUP_PLAN_ID)
     org_id = f"org_{uuid.uuid4().hex[:8]}"
     org = Organization(
         id=org_id,
         name=payload.company_name,
         domain=payload.company_domain,
         industry=payload.industry,
-        plan_tier="Enterprise",
+        plan_tier=plan.name if plan else "Free",
+        max_recruiter_seats=plan.max_recruiter_seats if plan else 1,
+        max_active_jobs=plan.max_active_jobs if plan else 2,
+        monthly_ai_credits=plan.monthly_ai_credits if plan else 200,
         logo_icon="briefcase",
         website=f"https://{payload.company_domain}"
     )
@@ -144,13 +177,14 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
         role="EMPLOYER_ADMIN",
         organization_id=org_id,
         avatar_url="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+        email_verified=False,
         is_active=True
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(data={"sub": user.id, "email": user.email, "role": user.role})
+    account_service.send_verification_email(db, user)
     log_audit_event(
         db=db,
         action="ORGANIZATION_REGISTERED",
@@ -159,14 +193,65 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
         entity_id=org_id,
         user_id=user.id,
         user_email=user.email,
-        details={"company": payload.company_name}
+        organization_id=org_id,
+        details={"company": payload.company_name, "plan": org.plan_tier}
     )
+    return issue_session(db, user)
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user=UserOut.model_validate(user)
+
+@router.post("/refresh", response_model=TokenResponse, dependencies=[auth_rate_limit])
+def refresh_session(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """Swap a refresh token for a new access token. Refresh tokens are single-use."""
+    user, new_refresh = account_service.rotate_refresh_token(db, payload.refresh_token)
+    return issue_session(db, user, refresh_token=new_refresh)
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Ends every session for the user by revoking their refresh tokens."""
+    account_service.revoke_tokens(db, current_user.id, account_service.REFRESH)
+    return MessageResponse(message="Signed out")
+
+
+@router.post("/verify-email", response_model=UserOut)
+def verify_email(payload: TokenRequest, db: Session = Depends(get_db)):
+    return UserOut.model_validate(account_service.verify_email(db, payload.token))
+
+
+@router.post("/resend-verification", response_model=MessageResponse, dependencies=[auth_rate_limit])
+def resend_verification(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.email_verified:
+        return MessageResponse(message="Email is already verified")
+    account_service.send_verification_email(db, current_user)
+    return MessageResponse(message="Verification email sent")
+
+
+@router.post("/forgot-password", response_model=MessageResponse, dependencies=[auth_rate_limit])
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    account_service.request_password_reset(db, payload.email)
+    return MessageResponse(message="If an account exists for that email, a reset link has been sent")
+
+
+@router.post("/reset-password", response_model=MessageResponse, dependencies=[auth_rate_limit])
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = account_service.reset_password(db, payload.token, payload.new_password)
+    log_audit_event(
+        db=db, action="PASSWORD_RESET", module="Auth", entity="User", entity_id=user.id,
+        user_id=user.id, user_email=user.email, organization_id=user.organization_id,
     )
+    return MessageResponse(message="Password updated. Please sign in again.")
+
+
+@router.post("/accept-invitation", response_model=TokenResponse, dependencies=[auth_rate_limit])
+def accept_invitation(payload: AcceptInvitationRequest, db: Session = Depends(get_db)):
+    user = account_service.accept_invitation(db, payload.token, payload.full_name, payload.password)
+    log_audit_event(
+        db=db, action="INVITATION_ACCEPTED", module="Auth", entity="User", entity_id=user.id,
+        user_id=user.id, user_email=user.email, organization_id=user.organization_id,
+        details={"role": user.role},
+    )
+    return issue_session(db, user)
+
 
 @router.get("/me", response_model=UserOut)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):

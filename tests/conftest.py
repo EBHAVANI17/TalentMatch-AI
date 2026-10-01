@@ -24,6 +24,7 @@ os.environ.setdefault("DEMO_MODE", "true")
 os.environ.setdefault("RATE_LIMIT_DEFAULT", "100000/minute")
 os.environ.setdefault("RATE_LIMIT_AUTH", "100000/minute")
 os.environ.setdefault("REDIS_URL", "")
+os.environ.setdefault("PASSWORD_HASH_ITERATIONS", "1000")  # production default is 600k
 
 
 @pytest.fixture(scope="session", autouse=True)

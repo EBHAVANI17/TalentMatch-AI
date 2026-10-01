@@ -1678,9 +1678,11 @@
       white-space: nowrap !important;
     }
 
+    /* Demo logins: hidden unless /api/v1/config/public reports demo_mode */
+    body.no-demo .demo-only { display: none !important; }
   </style>
 </head>
-<body>
+<body class="no-demo">
 
   <!-- ================================================================
        HEADER
@@ -1709,7 +1711,7 @@
 
         <!-- Logged-out actions -->
         <div id="auth-buttons" style="display:flex;align-items:center;gap:8px">
-          <div style="position:relative">
+          <div class="demo-only" style="position:relative">
             <button class="btn btn-secondary btn-sm" onclick="toggleDemoDropdown(event)" id="demo-dropdown-btn" style="border-color:rgba(99,102,241,0.4);background:rgba(99,102,241,0.08);color:var(--text-primary)">
               <i data-lucide="zap" style="width:14px;height:14px;color:var(--accent-indigo)"></i> Quick Login
             </button>
@@ -1764,6 +1766,7 @@
               <button class="user-dropdown-item" onclick="navigateToDashboard('settings')">
                 <i data-lucide="settings" style="width:15px;height:15px"></i> Settings
               </button>
+              <div class="demo-only">
               <div class="user-dropdown-divider"></div>
               <div style="padding:6px 12px;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Switch Persona</div>
               <button class="user-dropdown-item" onclick="demoLogin('aarav@stanford.edu','aarav123',event)">
@@ -1778,6 +1781,7 @@
               <button class="user-dropdown-item" onclick="demoLogin('admin@talentmatch.ai','admin123',event)">
                 <i data-lucide="shield" style="width:14px;height:14px;color:var(--accent-rose)"></i> Super Admin
               </button>
+              </div>
               <div class="user-dropdown-divider"></div>
               <button class="user-dropdown-item" onclick="logout()" style="color:var(--accent-rose)">
                 <i data-lucide="log-out" style="width:15px;height:15px"></i> Sign Out
@@ -1802,7 +1806,7 @@
         <h2 class="modal-title">Welcome Back</h2>
         <p class="modal-subtitle">Sign in to your NexusTalent OS account</p>
 
-        <div class="demo-accounts" style="margin-top:0;margin-bottom:18px">
+        <div class="demo-accounts demo-only" style="margin-top:0;margin-bottom:18px">
           <div class="demo-accounts-title" style="display:flex;align-items:center;gap:6px">
             <i data-lucide="zap" style="width:13px;height:13px"></i> 1-Click Instant Access
           </div>
@@ -1828,7 +1832,7 @@
           </div>
         </div>
 
-        <div class="form-divider" style="margin-bottom:16px">or enter credentials</div>
+        <div class="form-divider demo-only" style="margin-bottom:16px">or enter credentials</div>
 
         <form onsubmit="handleLogin(event)">
           <div class="form-group">
@@ -2101,7 +2105,7 @@
         </div>
 
         <!-- 1-Click Instant Persona Bar -->
-        <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border-base);border-radius:var(--radius-lg);padding:18px 24px;max-width:720px;width:100%">
+        <div class="demo-only" style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border-base);border-radius:var(--radius-lg);padding:18px 24px;max-width:720px;width:100%">
           <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:6px">
             <i data-lucide="zap" style="width:14px;height:14px;color:var(--accent-indigo)"></i>
             1-Click Instant Persona Access (No Captcha &bull; No Signup Form)
@@ -2239,7 +2243,9 @@
     // ====================================================================
     // STATE MANAGEMENT
     // ====================================================================
-    const API = 'http://127.0.0.1:8000/api/v1';
+    const API = (location.protocol === 'http:' || location.protocol === 'https:')
+      ? `${location.origin}/api/v1`
+      : 'http://127.0.0.1:8000/api/v1';
     const state = {
       user: null,
       token: null,
@@ -4525,6 +4531,10 @@
     // ====================================================================
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
+      fetch(`${API}/config/public`)
+        .then(res => res.ok ? res.json() : null)
+        .then(cfg => { if (cfg && cfg.demo_mode) document.body.classList.remove('no-demo'); })
+        .catch(() => {});
     });
   </script>
 </body>

@@ -3,9 +3,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.tenancy import TenantContext, get_tenant, require_super_admin, can_view_org, not_found
-from app.models.db_models import Organization, User
-from app.models.schemas import OrganizationOut, OrganizationCreate, OrganizationUpdate, UserOut
+from app.core.tenancy import TenantContext, get_tenant, require_super_admin, can_view_org, not_found, ORG_ROLES
+from app.models.db_models import Organization, User, Invitation
+from app.services import account_service
+from app.models.schemas import OrganizationOut, OrganizationCreate, OrganizationUpdate, UserOut, InvitationCreate, InvitationOut
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/organizations", tags=["Organizations (Tenants)"])
@@ -136,3 +137,65 @@ def update_organization(
     )
 
     return org
+
+
+# ---------------------------------------------------------------------------
+# Team invitations
+# ---------------------------------------------------------------------------
+def _org_admin_scope(db: Session, ctx: TenantContext, org_id: str) -> Organization:
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org or not can_view_org(ctx, org_id):
+        raise not_found("Organization")
+    if not (ctx.is_super_admin or ctx.is_org_admin):
+        raise HTTPException(status_code=403, detail="Organization admin access required")
+    return org
+
+
+@router.get("/{org_id}/invitations", response_model=List[InvitationOut])
+def list_invitations(org_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    _org_admin_scope(db, ctx, org_id)
+    return (
+        db.query(Invitation)
+        .filter(Invitation.organization_id == org_id)
+        .order_by(Invitation.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/{org_id}/invitations", response_model=InvitationOut, status_code=201)
+def invite_member(
+    org_id: str,
+    payload: InvitationCreate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
+):
+    org = _org_admin_scope(db, ctx, org_id)
+    if payload.role not in ORG_ROLES:
+        raise HTTPException(status_code=422, detail=f"role must be one of: {', '.join(sorted(ORG_ROLES))}")
+    invitation = account_service.create_invitation(db, org, payload.email, payload.role, ctx.user)
+    log_audit_event(
+        db=db, action="MEMBER_INVITED", module="Organizations", entity="Invitation", entity_id=invitation.id,
+        user_id=ctx.user.id, user_email=ctx.user.email, organization_id=org.id,
+        details={"email": invitation.email, "role": invitation.role},
+    )
+    return invitation
+
+
+@router.delete("/{org_id}/invitations/{invitation_id}", response_model=InvitationOut)
+def revoke_invitation(
+    org_id: str,
+    invitation_id: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
+):
+    _org_admin_scope(db, ctx, org_id)
+    invitation = db.query(Invitation).filter(
+        Invitation.id == invitation_id, Invitation.organization_id == org_id
+    ).first()
+    if not invitation:
+        raise not_found("Invitation")
+    if invitation.status == "pending":
+        invitation.status = "revoked"
+        db.commit()
+        db.refresh(invitation)
+    return invitation

@@ -49,7 +49,24 @@ class Settings(BaseSettings):
     # Auth
     jwt_secret_key: str = DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
+    # Kept at 24h while the legacy UI (which cannot refresh) is still in use.
     access_token_expire_hours: int = 24
+    refresh_token_expire_days: int = 30
+    password_min_length: int = 8
+    # PBKDF2-SHA256 work factor (OWASP 2023+: 600k). Tests lower it for speed.
+    password_hash_iterations: int = 600_000
+    # When true, new accounts must confirm their email before they can log in.
+    require_email_verification: bool = False
+    email_verification_ttl_hours: int = 48
+    password_reset_ttl_minutes: int = 60
+    invitation_ttl_days: int = 7
+
+    # Public URL of the web app, used in links inside emails
+    app_base_url: str = "http://localhost:8000"
+
+    # Email delivery: console (logs only) | ses (Phase 6)
+    email_backend: str = "console"
+    email_from: str = "Talent Match <no-reply@talentmatch.local>"
 
     # HTTP
     # Comma-separated list of allowed browser origins

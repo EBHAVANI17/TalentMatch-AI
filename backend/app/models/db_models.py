@@ -486,3 +486,40 @@ class SkillTaxonomy(Base):
     demand_level = Column(String(32), default="High")
     avg_salary_boost = Column(String(32), default="+15%")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+# =========================================================================
+# 10. ACCOUNT LIFECYCLE: ONE-TIME TOKENS & TEAM INVITATIONS
+# =========================================================================
+class UserToken(Base):
+    """Opaque single-use tokens (refresh, email verification, password reset).
+
+    Only a SHA-256 hash of the token is stored, so a database leak can't be replayed.
+    """
+    __tablename__ = "user_tokens"
+
+    id = Column(String(64), primary_key=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    purpose = Column(String(32), nullable=False)  # refresh | email_verify | password_reset
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (Index("ix_user_tokens_user_purpose", "user_id", "purpose"),)
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String(128), nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="RECRUITER")
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    invited_by_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(16), nullable=False, default="pending", index=True)  # pending | accepted | revoked
+    expires_at = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    organization = relationship("Organization")

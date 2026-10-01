@@ -12,7 +12,45 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: Optional[int] = None  # access token lifetime in seconds
+    refresh_token: Optional[str] = None
     user: "UserOut"
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class TokenRequest(BaseModel):
+    token: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class AcceptInvitationRequest(BaseModel):
+    token: str
+    full_name: str = Field(min_length=1, max_length=128)
+    password: str
+
+class InvitationCreate(BaseModel):
+    email: EmailStr
+    role: str = "RECRUITER"
+
+class InvitationOut(BaseModel):
+    id: str
+    organization_id: str
+    email: str
+    role: str
+    status: str
+    expires_at: datetime
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class MessageResponse(BaseModel):
+    message: str
 
 class RegisterCandidateRequest(BaseModel):
     email: EmailStr

@@ -108,29 +108,41 @@ ROLE_PERMISSIONS = {
 # =========================================================================
 # PASSWORD & TOKEN SECURITY
 # =========================================================================
+PASSWORD_SCHEME = "pbkdf2_sha256"
+LEGACY_ITERATIONS = 100_000  # hashes stored as "salt$hash" before iterations were recorded
+
+
+def _pbkdf2(password: str, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations).hex()
+
+
 def hash_password(password: str, salt: Optional[str] = None) -> str:
-    if not salt:
-        salt = secrets.token_hex(16)
-    hashed = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        100000
-    ).hex()
-    return f"{salt}${hashed}"
+    """Format: pbkdf2_sha256$<iterations>$<salt>$<hex digest>"""
+    salt = salt or secrets.token_hex(16)
+    iterations = settings.password_hash_iterations
+    return f"{PASSWORD_SCHEME}${iterations}${salt}${_pbkdf2(password, salt, iterations)}"
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        salt, expected_hash = hashed_password.split("$")
-        actual_hash = hashlib.pbkdf2_hmac(
-            "sha256",
-            plain_password.encode("utf-8"),
-            salt.encode("utf-8"),
-            100000
-        ).hex()
-        return secrets.compare_digest(actual_hash, expected_hash)
+        parts = hashed_password.split("$")
+        if len(parts) == 4 and parts[0] == PASSWORD_SCHEME:
+            _, iterations, salt, expected = parts
+            actual = _pbkdf2(plain_password, salt, int(iterations))
+        else:
+            salt, expected = parts
+            actual = _pbkdf2(plain_password, salt, LEGACY_ITERATIONS)
+        return secrets.compare_digest(actual, expected)
     except Exception:
         return False
+
+
+def password_needs_rehash(hashed_password: str) -> bool:
+    parts = hashed_password.split("$")
+    if len(parts) != 4 or parts[0] != PASSWORD_SCHEME:
+        return True
+    return int(parts[1]) < settings.password_hash_iterations
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
