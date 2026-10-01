@@ -16,6 +16,7 @@ from app.models.db_models import CandidateProfile, SkillTaxonomy, User, Job
 from app.models.schemas import CandidateProfileOut, CandidateProfileUpdate
 from app.services.recommender_service import get_candidate_out
 from app.services.audit_service import log_audit_event
+from app.services.skills_service import set_candidate_skills
 
 router = APIRouter(prefix="/candidates", tags=["Candidates"])
 
@@ -288,7 +289,7 @@ def update_candidate(
 
     if payload.title is not None: cand.title = payload.title
     if payload.bio is not None: cand.bio = payload.bio
-    if payload.skills is not None: cand.skills_json = json.dumps(payload.skills)
+    if payload.skills is not None: set_candidate_skills(db, cand, payload.skills)
     if payload.experience_years is not None: cand.experience_years = payload.experience_years
     if payload.location is not None: cand.location = payload.location
     if payload.remote_preference is not None: cand.remote_preference = payload.remote_preference

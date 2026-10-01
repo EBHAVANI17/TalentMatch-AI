@@ -11,6 +11,7 @@ from app.models.db_models import Job
 from app.models.schemas import JobOut, JobCreate
 from app.services.recommender_service import get_job_out
 from app.services.audit_service import log_audit_event
+from app.services.skills_service import set_job_skills
 
 router = APIRouter(prefix="/jobs", tags=["Job Requisitions"])
 
@@ -77,6 +78,7 @@ def create_job(
         applicants_count=0
     )
     db.add(job)
+    set_job_skills(db, job, payload.required_skills, payload.preferred_skills)
     db.commit()
     db.refresh(job)
 

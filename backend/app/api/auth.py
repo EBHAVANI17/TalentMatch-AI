@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.services import account_service
 from app.services.audit_service import log_audit_event
+from app.services.skills_service import set_candidate_skills
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access"])
 
@@ -123,6 +124,8 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
         profile_strength=95
     )
     db.add(profile)
+    db.flush()
+    set_candidate_skills(db, profile, payload.skills)
     db.commit()
     db.refresh(user)
 

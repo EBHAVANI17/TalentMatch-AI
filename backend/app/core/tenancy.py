@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import exists, or_
+from sqlalchemy import and_, exists, or_
 from sqlalchemy.orm import Query, Session
 
 from app.core.security import ROLE_PERMISSIONS, get_current_user, get_current_user_optional
@@ -154,8 +154,7 @@ def get_managed_job(db: Session, ctx: TenantContext, job_id: str) -> Job:
 def _applied_to_org(org_id: str):
     return exists().where(
         Application.candidate_id == CandidateProfile.id,
-        Application.job_id == Job.id,
-        Job.organization_id == org_id,
+        Application.organization_id == org_id,
     )
 
 
@@ -163,7 +162,14 @@ def scope_candidates(query: Query, ctx: TenantContext) -> Query:
     if ctx.is_super_admin:
         return query
     if ctx.is_org_member:
-        return query.filter(or_(CandidateProfile.is_searchable.is_(True), _applied_to_org(ctx.org_id)))
+        # Own sourced candidates, plus marketplace talent that is searchable or applied to us.
+        return query.filter(or_(
+            CandidateProfile.owner_org_id == ctx.org_id,
+            and_(
+                CandidateProfile.owner_org_id.is_(None),
+                or_(CandidateProfile.is_searchable.is_(True), _applied_to_org(ctx.org_id)),
+            ),
+        ))
     if ctx.is_candidate:
         return query.filter(CandidateProfile.user_id == ctx.user.id)
     return query.filter(False)
@@ -174,13 +180,14 @@ def can_view_candidate(db: Session, ctx: TenantContext, candidate: CandidateProf
         return True
     if not ctx.is_org_member:
         return False
+    if candidate.owner_org_id is not None:
+        return candidate.owner_org_id == ctx.org_id
     if candidate.is_searchable:
         return True
     return db.query(
         exists().where(
             Application.candidate_id == candidate.id,
-            Application.job_id == Job.id,
-            Job.organization_id == ctx.org_id,
+            Application.organization_id == ctx.org_id,
         )
     ).scalar()
 
@@ -203,7 +210,7 @@ def scope_applications(query: Query, ctx: TenantContext) -> Query:
     if ctx.is_super_admin:
         return query
     if ctx.is_org_member:
-        return query.join(Job, Application.job_id == Job.id).filter(Job.organization_id == ctx.org_id)
+        return query.filter(Application.organization_id == ctx.org_id)
     if ctx.is_candidate and ctx.candidate_id:
         return query.filter(Application.candidate_id == ctx.candidate_id)
     return query.filter(False)
@@ -213,7 +220,7 @@ def can_view_application(ctx: TenantContext, application: Application) -> bool:
     if ctx.is_super_admin:
         return True
     if ctx.is_org_member:
-        return application.job is not None and application.job.organization_id == ctx.org_id
+        return application.organization_id == ctx.org_id
     return ctx.candidate_id is not None and application.candidate_id == ctx.candidate_id
 
 

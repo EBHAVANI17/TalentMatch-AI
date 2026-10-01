@@ -789,6 +789,7 @@ def seed_demo_data():
         ))
 
         db.commit()
+        _finalize_demo_data(db)
         print("Production enterprise database seeded successfully with normalized models!")
 
     except Exception as e:
@@ -797,6 +798,18 @@ def seed_demo_data():
         raise e
     finally:
         db.close()
+
+def _finalize_demo_data(db):
+    """Fill fields the seed lists above don't set: normalized skills, tenant on applications, publish dates."""
+    from app.services.skills_service import sync_all_skill_links
+
+    for application in db.query(Application).all():
+        application.organization_id = application.job.organization_id if application.job else None
+    for job in db.query(Job).filter(Job.status == "Active", Job.published_at.is_(None)).all():
+        job.published_at = job.created_at
+    db.commit()
+    sync_all_skill_links(db)
+
 
 if __name__ == "__main__":
     run_migrations()

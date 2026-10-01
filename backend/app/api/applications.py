@@ -103,6 +103,8 @@ def apply_to_job(
         id=app_id,
         job_id=job.id,
         candidate_id=candidate.id,
+        organization_id=job.organization_id,
+        source="applied" if ctx.is_candidate else "sourced",
         match_score=score,
         stage="Applied",
         cover_note=payload.cover_note or "Applied via 1-Click Autonomous Match",

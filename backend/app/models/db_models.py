@@ -95,6 +95,20 @@ class CandidateProfile(Base):
     profile_strength = Column(Integer, default=95)
     is_searchable = Column(Boolean, default=True, index=True)
 
+    # Contact, availability and preferences
+    phone = Column(String(32), default="")
+    industry = Column(String(64), default="")
+    notice_period_days = Column(Integer, nullable=True)
+    availability = Column(String(32), default="open")  # open | passive | not_looking
+    available_from = Column(DateTime, nullable=True)
+    preferred_locations_json = Column(Text, default="[]")
+    employment_types_json = Column(Text, default="[]")  # Full-time, Contract, ...
+
+    # Tenancy: NULL = self-registered talent; set = sourced by (and private to) that organization
+    owner_org_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+    source = Column(String(32), default="self_registered")  # self_registered | recruiter | import
+    last_active_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -105,6 +119,23 @@ class CandidateProfile(Base):
     work_experiences = relationship("WorkExperience", back_populates="candidate", cascade="all, delete-orphan")
     education_records = relationship("EducationRecord", back_populates="candidate", cascade="all, delete-orphan")
     projects = relationship("CandidateProject", back_populates="candidate", cascade="all, delete-orphan")
+    certifications = relationship("Certification", back_populates="candidate", cascade="all, delete-orphan")
+    languages = relationship("CandidateLanguage", back_populates="candidate", cascade="all, delete-orphan")
+    skill_links = relationship("CandidateSkill", back_populates="candidate", cascade="all, delete-orphan")
+
+    @property
+    def preferred_locations(self):
+        try:
+            return json.loads(self.preferred_locations_json) if self.preferred_locations_json else []
+        except Exception:
+            return []
+
+    @property
+    def employment_types(self):
+        try:
+            return json.loads(self.employment_types_json) if self.employment_types_json else []
+        except Exception:
+            return []
 
     @property
     def skills(self):
@@ -190,6 +221,7 @@ class Resume(Base):
     file_format = Column(String(32), default="pdf") # pdf, docx, txt
     file_size_bytes = Column(Integer, default=0)
     file_storage_path = Column(String(512), default="")
+    document_id = Column(String(64), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     current_version = Column(Integer, default=1)
     is_primary = Column(Boolean, default=True)
     processing_status = Column(String(32), default="Parsed", index=True) # Uploaded, Processing, Parsed, Failed
@@ -285,11 +317,20 @@ class Job(Base):
     status = Column(String(32), default="Active", index=True) # Active, Closed, Draft, Paused
     benefits_json = Column(Text, default="[]")
     applicants_count = Column(Integer, default=0)
+    employment_type = Column(String(32), default="Full-time")  # Full-time | Part-time | Contract | Internship
+    openings = Column(Integer, default=1)
+    max_experience_years = Column(Float, nullable=True)
+    seniority = Column(String(32), default="")
+    industry = Column(String(64), default="")
+    application_deadline = Column(DateTime, nullable=True)
+    published_at = Column(DateTime, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     organization = relationship("Organization", back_populates="jobs")
+    skill_links = relationship("JobSkill", back_populates="job", cascade="all, delete-orphan")
     applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
 
     @property
@@ -329,6 +370,9 @@ class Application(Base):
     id = Column(String(64), primary_key=True, index=True)
     job_id = Column(String(64), ForeignKey("jobs.id"), nullable=False, index=True)
     candidate_id = Column(String(64), ForeignKey("candidate_profiles.id"), nullable=False, index=True)
+    # Copied from the job so tenant-scoped queries don't need a join
+    organization_id = Column(String(64), ForeignKey("organizations.id"), nullable=True, index=True)
+    source = Column(String(32), default="applied")  # applied | sourced | referral | import
     match_score = Column(Integer, default=85)
     
     # Stages: Applied, AI Screened, Shortlisted, Interview, Assessment, Offered, Hired, Rejected
@@ -523,3 +567,145 @@ class Invitation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     organization = relationship("Organization")
+
+
+# =========================================================================
+# 11. NORMALIZED SKILLS, CERTIFICATIONS, LANGUAGES, NOTES
+# =========================================================================
+class CandidateSkill(Base):
+    __tablename__ = "candidate_skills"
+
+    id = Column(String(64), primary_key=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(String(64), ForeignKey("skill_taxonomies.id", ondelete="CASCADE"), nullable=False, index=True)
+    years = Column(Float, nullable=True)
+    proficiency = Column(String(16), default="")  # beginner | intermediate | advanced | expert
+    position = Column(Integer, default=0)  # display order chosen by the candidate
+
+    candidate = relationship("CandidateProfile", back_populates="skill_links")
+    skill = relationship("SkillTaxonomy")
+
+    __table_args__ = (Index("uq_candidate_skill", "candidate_id", "skill_id", unique=True),)
+
+
+class JobSkill(Base):
+    __tablename__ = "job_skills"
+
+    id = Column(String(64), primary_key=True)
+    job_id = Column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(String(64), ForeignKey("skill_taxonomies.id", ondelete="CASCADE"), nullable=False, index=True)
+    importance = Column(String(16), nullable=False, default="required")  # required | preferred
+    position = Column(Integer, default=0)
+
+    job = relationship("Job", back_populates="skill_links")
+    skill = relationship("SkillTaxonomy")
+
+    __table_args__ = (Index("uq_job_skill", "job_id", "skill_id", unique=True),)
+
+
+class Certification(Base):
+    __tablename__ = "certifications"
+
+    id = Column(String(64), primary_key=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(160), nullable=False)
+    issuer = Column(String(128), default="")
+    issued_on = Column(String(16), default="")   # "2024-05"
+    expires_on = Column(String(16), default="")
+    credential_url = Column(String(512), default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    candidate = relationship("CandidateProfile", back_populates="certifications")
+
+
+class CandidateLanguage(Base):
+    __tablename__ = "candidate_languages"
+
+    id = Column(String(64), primary_key=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    language = Column(String(64), nullable=False)
+    proficiency = Column(String(16), default="professional")  # basic | conversational | professional | native
+
+    candidate = relationship("CandidateProfile", back_populates="languages")
+
+
+class CandidateNote(Base):
+    """Private recruiter notes. Always scoped to one organization."""
+    __tablename__ = "candidate_notes"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(String(64), ForeignKey("applications.id", ondelete="SET NULL"), nullable=True, index=True)
+    author_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    author = relationship("User")
+
+
+# =========================================================================
+# 12. HIRING PIPELINE CONFIGURATION
+# =========================================================================
+class PipelineStage(Base):
+    """Per-organization pipeline. Organizations without rows use DEFAULT_PIPELINE (services/pipeline_service.py)."""
+    __tablename__ = "pipeline_stages"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(48), nullable=False)
+    position = Column(Integer, nullable=False, default=0)
+    kind = Column(String(16), nullable=False, default="active")  # active | hired | rejected
+
+    __table_args__ = (Index("uq_pipeline_stage_org_name", "organization_id", "name", unique=True),)
+
+
+# =========================================================================
+# 13. DOCUMENTS (FILE STORAGE METADATA)
+# =========================================================================
+class Document(Base):
+    """A stored file. Bytes live in the storage backend (local disk or S3), never in the database."""
+    __tablename__ = "documents"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=True, index=True)
+    uploaded_by_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    kind = Column(String(32), nullable=False, default="resume")  # resume | attachment | avatar
+    filename = Column(String(256), nullable=False)
+    content_type = Column(String(128), nullable=False, default="application/octet-stream")
+    size_bytes = Column(Integer, nullable=False, default=0)
+    sha256 = Column(String(64), nullable=False, index=True)
+    storage_backend = Column(String(16), nullable=False, default="local")
+    storage_key = Column(String(512), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =========================================================================
+# 14. DOMAIN EVENTS (TRANSACTIONAL OUTBOX)
+# =========================================================================
+class OutboxEvent(Base):
+    """Domain events written in the same transaction as the change that caused them.
+
+    A dispatcher delivers them (notifications today; workflows and webhooks later),
+    so a crash between "save" and "notify" can never lose an event.
+    """
+    __tablename__ = "events_outbox"
+
+    id = Column(String(64), primary_key=True)
+    type = Column(String(64), nullable=False, index=True)  # e.g. application.created
+    organization_id = Column(String(64), nullable=True, index=True)
+    actor_user_id = Column(String(64), nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    dispatched_at = Column(DateTime, nullable=True, index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text, default="")
+
+    @property
+    def payload(self):
+        try:
+            return json.loads(self.payload_json) if self.payload_json else {}
+        except Exception:
+            return {}
