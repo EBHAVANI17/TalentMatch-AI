@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed browser origins
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173"
 
+    # Redis (rate limits now; queues and caching later). Unset = in-memory fallbacks.
+    redis_url: str = ""
+
+    # Rate limiting (per client IP). Format: "<count>/<second|minute|hour|day>"
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "300/minute"  # any /api/ request
+    rate_limit_auth: str = "10/minute"      # login and sign-up
+
     # Matching
     weights: MatchingWeights = MatchingWeights()
 

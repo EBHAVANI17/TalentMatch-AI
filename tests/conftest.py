@@ -20,6 +20,10 @@ os.environ["DATABASE_URL"] = os.environ.get(
 )
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEMO_MODE", "true")
+# The whole suite runs from one client IP; rate limits get their own focused tests.
+os.environ.setdefault("RATE_LIMIT_DEFAULT", "100000/minute")
+os.environ.setdefault("RATE_LIMIT_AUTH", "100000/minute")
+os.environ.setdefault("REDIS_URL", "")
 
 
 @pytest.fixture(scope="session", autouse=True)

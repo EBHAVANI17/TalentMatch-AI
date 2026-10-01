@@ -6,10 +6,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
+from app.core.logging import configure_logging
+from app.core.middleware import RequestContextMiddleware
 from app.db.seed import init_db
 from app.api.routes import router
 
 settings.validate_for_runtime()
+configure_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,7 +29,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration (origins come from the CORS_ORIGINS env var)
+# Request IDs, access logs, security headers, default rate limit
+app.add_middleware(RequestContextMiddleware)
+# CORS is added last so it wraps everything, including 429 responses
+# (origins come from the CORS_ORIGINS env var)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

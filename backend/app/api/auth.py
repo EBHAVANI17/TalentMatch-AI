@@ -11,11 +11,15 @@ from app.models.schemas import (
     LoginRequest, TokenResponse, RegisterCandidateRequest,
     RegisterEmployerRequest, UserOut
 )
+from app.core.config import settings
+from app.core.rate_limit import rate_limit
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access"])
 
-@router.post("/login", response_model=TokenResponse)
+auth_rate_limit = Depends(rate_limit("auth", settings.rate_limit_auth))
+
+@router.post("/login", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
@@ -47,7 +51,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         user=UserOut.model_validate(user)
     )
 
-@router.post("/register/candidate", response_model=TokenResponse)
+@router.post("/register/candidate", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
@@ -109,7 +113,7 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
         user=UserOut.model_validate(user)
     )
 
-@router.post("/register/employer", response_model=TokenResponse)
+@router.post("/register/employer", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
