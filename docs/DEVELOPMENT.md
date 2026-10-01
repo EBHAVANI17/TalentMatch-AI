@@ -12,6 +12,35 @@ Open http://localhost:8000 (app) and http://localhost:8000/docs (API docs).
 On first start the app creates `backend/data/talentmatch_production.db`, applies migrations
 and (with `DEMO_MODE=true`, the default) loads demo personas.
 
+## New web app (web/, React + TypeScript + Vite)
+
+The new workspace is being built screen by screen next to the classic UI.
+
+| URL | What |
+|-----|------|
+| `/` | Classic UI (`frontend/index.html`), still the main workspace |
+| `/app` | New workspace (`web/`). Sign-in, account emails, Home, Team so far |
+
+Both share the same session (`nexus-token` in localStorage), so you can move between them.
+
+```bash
+cd web
+npm install
+npm run dev          # http://localhost:5173/app/  (proxies /api to :8000; start the API too)
+npm run build        # outputs web/dist, which FastAPI serves at /app
+npm test             # Vitest unit/component tests
+npm run e2e          # Playwright: starts its own API on a fresh demo DB (run `npm run build` first)
+npm run gen:api      # regenerate src/lib/api/schema.d.ts after changing backend schemas
+```
+
+Conventions:
+- One feature per folder in `src/features/<feature>/` (page, components, tests).
+- Shared UI in `src/components/ui`. Use these instead of styling raw elements.
+- All API calls go through `api()` in `src/lib/api/client.ts` (auth header, token refresh, error messages).
+- Colours come from tokens in `src/styles/tokens.css` (light/dark). Never hard-code colours.
+- No emojis; icons come from `lucide-react`.
+- When a screen moves here, add it to `src/app/navigation.ts` and keep the classic screen until the new one is confirmed.
+
 ## Full stack with Docker (PostgreSQL + Redis)
 
 ```bash
@@ -78,12 +107,24 @@ All settings are in `backend/app/core/config.py` and come from environment varia
 backend/
   app/
     api/        REST routers (mounted under /api/v1)
-    core/       config, database, security
+    adapters/   pluggable integrations (email now; SMS, storage, AI, payments later)
+    core/       config, database, security, tenancy (access rules), middleware, rate limits, logging
     db/         migrations runner, demo seed
     models/     SQLAlchemy models, Pydantic schemas
     services/   business logic (matching, AI copilot, analytics, audit, notifications)
   alembic/      migration scripts
-frontend/       legacy single-page UI (index.html), being migrated to web/
+  scripts/      export_openapi.py, e2e_server.py
+frontend/       classic single-page UI (index.html), served at /
+web/            new React workspace, served at /app
 tests/          pytest suite (conftest.py sets up the isolated DB)
 infra/          Docker/Postgres setup (AWS Terraform comes later)
 ```
+
+## Security model (summary)
+
+- Every route except login/sign-up, the public job board and `/config/public` needs a bearer token.
+- Visibility rules live in `backend/app/core/tenancy.py`. Use its `scope_*` and `get_visible_*` helpers
+  in routers instead of writing your own checks. Records outside the caller's tenant return 404.
+- `tests/test_tenancy.py` is the cross-tenant suite. Add a case for every new tenant-owned endpoint.
+- Refresh tokens rotate and are single-use; replaying one ends all of that user's sessions.
+- Rate limits: `RATE_LIMIT_DEFAULT` per IP on `/api`, `RATE_LIMIT_AUTH` on login/sign-up/reset.

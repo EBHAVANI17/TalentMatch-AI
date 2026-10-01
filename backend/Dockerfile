@@ -1,4 +1,14 @@
 # Build from the repository root:  docker build -f backend/Dockerfile .
+
+# --- Stage 1: build the React workspace (web/) -------------------------------
+FROM node:22-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
+# --- Stage 2: API + both frontends -------------------------------------------
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,6 +24,7 @@ COPY backend/alembic.ini ./alembic.ini
 COPY backend/alembic ./alembic
 COPY backend/app ./app
 COPY frontend /srv/frontend
+COPY --from=web /web/dist /srv/web/dist
 
 RUN useradd --create-home --uid 1000 appuser \
     && mkdir -p /srv/backend/data /srv/backend/storage \

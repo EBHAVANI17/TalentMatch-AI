@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -56,7 +57,21 @@ def health_check():
         "database": "PostgreSQL" if settings.database_url.startswith("postgres") else "SQLite",
     }
 
-# Check if frontend directory exists and serve it
+# New React workspace (web/), built to web/dist and served at /app.
+# Unknown /app/* paths return index.html so client-side routes (e.g. /app/team) work on reload.
+web_dist = Path(__file__).resolve().parents[2] / "web" / "dist"
+if web_dist.is_dir():
+    app.mount("/app/assets", StaticFiles(directory=web_dist / "assets"), name="web-assets")
+
+    @app.get("/app", include_in_schema=False)
+    @app.get("/app/{path:path}", include_in_schema=False)
+    def serve_web_app(path: str = ""):
+        candidate = (web_dist / path).resolve()
+        if path and candidate.is_file() and web_dist in candidate.parents:
+            return FileResponse(candidate)
+        return FileResponse(web_dist / "index.html", headers={"Cache-Control": "no-cache"})
+
+# Legacy single-page UI, served at the site root until every screen has moved to /app
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend"))
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")

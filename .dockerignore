@@ -11,3 +11,5 @@ node_modules
 web/node_modules
 web/dist
 tests
+web/e2e
+web/test-results

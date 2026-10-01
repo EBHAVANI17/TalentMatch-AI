@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --color-bg: var(--tm-bg);
+  --color-surface: var(--tm-surface);
+  --color-surface-2: var(--tm-surface-2);
+  --color-border: var(--tm-border);
+  --color-fg: var(--tm-fg);
+  --color-muted: var(--tm-muted);
+  --color-primary: var(--tm-primary);
+  --color-primary-hover: var(--tm-primary-hover);
+  --color-primary-fg: var(--tm-primary-fg);
+  --color-primary-soft: var(--tm-primary-soft);
+  --color-success: var(--tm-success);
+  --color-success-soft: var(--tm-success-soft);
+  --color-warning: var(--tm-warning);
+  --color-warning-soft: var(--tm-warning-soft);
+  --color-danger: var(--tm-danger);
+  --color-danger-soft: var(--tm-danger-soft);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --shadow-card: var(--tm-shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--tm-bg);
+  color: var(--tm-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px var(--tm-ring);
+  border-radius: 6px;
+}
+
+/* Buttons, tags and nav items never wrap mid-label (PROJECT_STANDARDS 3.3). */
+button,
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

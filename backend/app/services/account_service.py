@@ -102,7 +102,7 @@ def rotate_refresh_token(db: Session, raw: str) -> Tuple[User, str]:
 # ---------------------------------------------------------------------------
 def send_verification_email(db: Session, user: User) -> None:
     token = issue_token(db, user, EMAIL_VERIFY, timedelta(hours=settings.email_verification_ttl_hours))
-    link = _link("/verify-email", token)
+    link = _link("/app/verify-email", token)
     get_email_sender().send(EmailMessage(
         to=user.email,
         subject="Confirm your Talent Match email",
@@ -134,7 +134,7 @@ def request_password_reset(db: Session, email: str) -> None:
     get_email_sender().send(EmailMessage(
         to=user.email,
         subject="Reset your Talent Match password",
-        text=f"Hi {user.full_name},\n\nReset your password:\n{_link('/reset-password', token)}\n\n"
+        text=f"Hi {user.full_name},\n\nReset your password:\n{_link('/app/reset-password', token)}\n\n"
              f"This link expires in {settings.password_reset_ttl_minutes} minutes. "
              "If you didn't ask for this, you can ignore this email.",
         tags=[PASSWORD_RESET],
@@ -196,7 +196,7 @@ def create_invitation(db: Session, org: Organization, email: str, role: str, inv
         to=email,
         subject=f"{invited_by.full_name} invited you to {org.name} on Talent Match",
         text=f"You've been invited to join {org.name} as {role.replace('_', ' ').title()}.\n\n"
-             f"Accept the invitation:\n{_link('/accept-invitation', raw)}\n\n"
+             f"Accept the invitation:\n{_link('/app/accept-invitation', raw)}\n\n"
              f"This invitation expires in {settings.invitation_ttl_days} days.",
         tags=["invitation"],
     ))

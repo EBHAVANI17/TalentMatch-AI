@@ -1,0 +1,48 @@
+/*
+ * Design tokens. Components use these through Tailwind utilities
+ * (bg-surface, text-muted, border-border, bg-primary, ...).
+ * Organization branding (white-label) overrides the --tm-primary* values at runtime.
+ */
+:root {
+  --tm-bg: #f6f7fb;
+  --tm-surface: #ffffff;
+  --tm-surface-2: #f1f3f9;
+  --tm-border: #e3e6ef;
+  --tm-fg: #111827;
+  --tm-muted: #5b6475;
+  --tm-primary: #4f46e5;
+  --tm-primary-hover: #4338ca;
+  --tm-primary-fg: #ffffff;
+  --tm-primary-soft: #eef0ff;
+  --tm-success: #059669;
+  --tm-success-soft: #e7f7f1;
+  --tm-warning: #b45309;
+  --tm-warning-soft: #fdf3e2;
+  --tm-danger: #dc2626;
+  --tm-danger-soft: #fdecec;
+  --tm-ring: rgba(79, 70, 229, 0.35);
+  --tm-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.04);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --tm-bg: #0b0e17;
+  --tm-surface: #121726;
+  --tm-surface-2: #182033;
+  --tm-border: #252e45;
+  --tm-fg: #e8ebf3;
+  --tm-muted: #95a0b8;
+  --tm-primary: #818cf8;
+  --tm-primary-hover: #a5b4fc;
+  --tm-primary-fg: #0b0e17;
+  --tm-primary-soft: #1e2347;
+  --tm-success: #34d399;
+  --tm-success-soft: #0f2a24;
+  --tm-warning: #fbbf24;
+  --tm-warning-soft: #2b2312;
+  --tm-danger: #f87171;
+  --tm-danger-soft: #2e1717;
+  --tm-ring: rgba(129, 140, 248, 0.45);
+  --tm-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
