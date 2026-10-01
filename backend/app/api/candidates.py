@@ -307,60 +307,6 @@ def update_candidate(
 
     return get_candidate_out(cand)
 
-@router.post("/parse-resume", response_model=ResumeParseResponse)
-def parse_resume(payload: ResumeParseRequest, db: Session = Depends(get_db)):
-    text = payload.resume_text
-    taxonomy = db.query(SkillTaxonomy).all()
-    
-    found_skills = []
-    for item in taxonomy:
-        pattern = r"\b" + re.escape(item.name) + r"\b"
-        if re.search(pattern, text, re.IGNORECASE):
-            found_skills.append(item.name)
-
-    exp_match = re.search(r"(\d+)\+?\s+years?", text, re.IGNORECASE)
-    years = float(exp_match.group(1)) if exp_match else 5.0
-
-    education = "Bachelor's"
-    if re.search(r"phd|doctorate", text, re.IGNORECASE):
-        education = "PhD"
-    elif re.search(r"master|ms\b|m\.s\.", text, re.IGNORECASE):
-        education = "Master's"
-
-    location = "San Francisco, CA"
-    if "new york" in text.lower():
-        location = "New York, NY"
-    elif "seattle" in text.lower():
-        location = "Seattle, WA"
-    elif "austin" in text.lower():
-        location = "Austin, TX"
-    elif "bangalore" in text.lower():
-        location = "Bangalore, India"
-
-    first_line = text.strip().split("\n")[0].strip()
-    name = first_line if len(first_line.split()) <= 4 and len(first_line) > 2 else "Verified Candidate"
-
-    title = "Senior Distributed Systems Engineer"
-    for line in text.strip().split("\n"):
-        line_clean = line.strip()
-        if any(keyword in line_clean.lower() for keyword in ["engineer", "developer", "architect", "scientist", "specialist"]):
-            title = line_clean
-            break
-
-    ats_score = int(min(98, max(75, 70 + len(found_skills) * 3)))
-
-    return ResumeParseResponse(
-        name=name,
-        extracted_title=title,
-        extracted_skills=list(set(found_skills)),
-        extracted_experience_years=years,
-        extracted_education=education,
-        extracted_location=location,
-        confidence_score=0.96,
-        ats_score=ats_score,
-        raw_summary=f"Extracted {len(found_skills)} verified competencies and {years} years of production domain experience."
-    )
-
 @router.get("/{candidate_id}/dossier")
 def get_candidate_dossier(candidate_id: str, db: Session = Depends(get_db)):
     from app.services.ai_copilot_service import generate_candidate_dossier_db

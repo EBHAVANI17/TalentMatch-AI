@@ -9,9 +9,11 @@ from app.core.config import settings
 from app.db.seed import init_db
 from app.api.routes import router
 
+settings.validate_for_runtime()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Run database schema creation and production seeding on startup
+    # Apply pending migrations, and seed demo data when DEMO_MODE is on
     init_db()
     yield
 
@@ -24,10 +26,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration (origins come from the CORS_ORIGINS env var)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +37,8 @@ app.add_middleware(
 
 # Mount API Routers
 app.include_router(router, prefix=settings.api_prefix)
-app.include_router(router)  # Also mount at root for direct legacy support
+# Legacy un-prefixed paths still work, but are hidden from the OpenAPI docs
+app.include_router(router, include_in_schema=False)
 
 @app.get("/health", tags=["System"])
 def health_check():
@@ -43,8 +46,8 @@ def health_check():
         "status": "healthy",
         "service": settings.app_name,
         "version": settings.app_version,
-        "database": "SQLite Production Relational Store",
-        "engine": "Autonomous Semantic Vector Matcher v2.5"
+        "environment": settings.environment,
+        "database": "PostgreSQL" if settings.database_url.startswith("postgres") else "SQLite",
     }
 
 # Check if frontend directory exists and serve it

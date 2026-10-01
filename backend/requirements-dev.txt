@@ -1,0 +1,4 @@
+# Local development and CI: runtime deps plus test tooling
+-r requirements.txt
+pytest>=8.0.0
+httpx>=0.27.0

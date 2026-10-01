@@ -2,8 +2,10 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.core.database import engine, Base, SessionLocal
+from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.security import hash_password
+from app.db.migrations import run_migrations
 from app.models.db_models import (
     Organization, User, CandidateProfile, WorkExperience, EducationRecord,
     CandidateProject, Resume, ResumeVersion, ResumeAnalysis, Job, Application,
@@ -12,7 +14,18 @@ from app.models.db_models import (
 )
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    """Bring the schema up to date, then load demo data when DEMO_MODE is on."""
+    if settings.auto_migrate:
+        run_migrations()
+    if settings.demo_mode:
+        seed_demo_data()
+
+
+def seed_demo_data():
+    """Idempotent: does nothing if the database already has users.
+
+    Run manually with:  python -m app.db.seed   (from the backend/ folder)
+    """
     db = SessionLocal()
     try:
         # Check if already seeded
@@ -782,4 +795,5 @@ def init_db():
         db.close()
 
 if __name__ == "__main__":
-    init_db()
+    run_migrations()
+    seed_demo_data()

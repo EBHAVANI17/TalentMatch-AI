@@ -1,14 +1,62 @@
-version: '3.8'
-
+# Local full stack: API + PostgreSQL (with pgvector) + Redis.
+#   docker compose up --build
+# Then open http://localhost:8000  (API docs at /docs)
 services:
-  talentmatch-api:
+  api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: talentmatch_backend
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: talentmatch_api
     ports:
       - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - PORT=8000
-      - HOST=0.0.0.0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      DATABASE_URL: postgresql+psycopg://talentmatch:talentmatch@postgres:5432/talentmatch
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - resume_storage:/srv/backend/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: talentmatch_postgres
+    environment:
+      POSTGRES_USER: talentmatch
+      POSTGRES_PASSWORD: talentmatch
+      POSTGRES_DB: talentmatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U talentmatch -d talentmatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: talentmatch_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  resume_storage:

@@ -6,11 +6,12 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.core.database import get_db
 
-JWT_SECRET_KEY = "talentmatch_enterprise_super_secret_jwt_key_prod_2026"
-JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
+JWT_SECRET_KEY = settings.jwt_secret_key
+JWT_ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_HOURS = settings.access_token_expire_hours
 
 security_bearer = HTTPBearer(auto_error=False)
 
