@@ -787,6 +787,8 @@ class Match(Base):
     explanation = Column(Text, nullable=False, default="")
     engine_version = Column(String(16), nullable=False)
     weights_hash = Column(String(16), nullable=False, default="")
+    # Hash of everything the score depends on; a different hash means the match is stale
+    inputs_hash = Column(String(64), nullable=False, default="")
     # Recruiter decision from the Talent Match screen: new | shortlisted | dismissed
     status = Column(String(16), nullable=False, default="new", index=True)
     computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
