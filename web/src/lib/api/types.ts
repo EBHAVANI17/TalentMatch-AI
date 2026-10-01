@@ -9,3 +9,17 @@ export type Organization = Schemas["OrganizationOut"];
 export type Invitation = Schemas["InvitationOut"];
 export type PublicConfig = Schemas["PublicConfig"];
 export type MessageResponse = Schemas["MessageResponse"];
+
+export type Job = Schemas["JobOut"];
+export type JobCreate = Schemas["JobCreate"];
+export type JobUpdate = Schemas["JobUpdate"];
+export type Application = Schemas["ApplicationOut"];
+export type CandidateSummary = Schemas["CandidateProfileOut"];
+export type CandidateDetail = Schemas["CandidateDetailOut"];
+export type CandidateUpdate = Schemas["CandidateProfileUpdate"];
+export type SourcedCandidateCreate = Schemas["SourcedCandidateCreate"];
+export type CandidateNote = Schemas["CandidateNoteOut"];
+export type RecruiterDashboard = Schemas["RecruiterDashboard"];
+export type PipelineStage = Schemas["StageOut"];
+export type Resume = Schemas["ResumeOut"];
+export type DownloadLink = Schemas["DownloadLink"];

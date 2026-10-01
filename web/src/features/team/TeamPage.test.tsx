@@ -78,9 +78,12 @@ describe("Team page", () => {
       ...baseHandlers(),
       "GET /auth/me": () => ({ body: recruiter }),
       "GET /organizations/org_anthropic": () => ({ body: { id: "org_anthropic", name: "Anthropic", domain: "anthropic.com" } }),
+      "GET /jobs": () => ({ body: [] }),
+      "GET /dashboard/recruiter": () => ({ status: 503, body: { detail: "not needed for this test" } }),
     });
     const { router } = renderApp("/team");
-    await screen.findByRole("heading", { name: /Welcome/ });
+    // Recruiters are sent to their dashboard instead
+    await screen.findByRole("heading", { name: "Dashboard" });
     expect(router.state.location.pathname).toBe("/");
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
   });

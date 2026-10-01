@@ -27,10 +27,10 @@ test.describe("new workspace smoke test", () => {
     await expect(page.getByText(email, { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath("02-team.png"), fullPage: true });
 
-    // Home shows the organization from the API
+    // The Team page shows the organization from the API; recruiters land on the dashboard
+    await expect(page.getByRole("heading", { name: "Your organization" })).toBeVisible();
     await page.goto("/app/");
-    await expect(page.getByRole("heading", { name: "Welcome, Sarah" })).toBeVisible();
-    await expect(page.getByText("Your organization")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await page.screenshot({ path: info.outputPath("03-home.png"), fullPage: true });
 
     // The classic workspace shares the session (same localStorage keys): its header shows the signed-in user
@@ -52,7 +52,7 @@ test.describe("new workspace smoke test", () => {
   test("dark theme toggle persists", async ({ page }) => {
     await page.goto("/app/login");
     await page.getByRole("button", { name: /Platform admin/ }).click();
-    await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     const html = page.locator("html");
     const before = await html.getAttribute("data-theme");
     await page.getByRole("button", { name: /Switch to (dark|light) theme/ }).click();

@@ -8,6 +8,7 @@ export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
   fullyParallel: false,
+  workers: 1, // all projects share one demo database
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   use: {

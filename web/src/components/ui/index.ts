@@ -6,3 +6,5 @@ export { Alert, EmptyState, ErrorState, FullPageSpinner, Skeleton, Spinner } fro
 export { Input, type InputProps } from "./Input";
 export { ConfirmDialog, Modal } from "./Modal";
 export { ToastProvider, useToast } from "./Toast";
+export { PageHeader, Select, TagInput, Textarea, type SelectProps } from "./Fields";
+export { Avatar } from "./Avatar";

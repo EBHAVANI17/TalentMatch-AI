@@ -22,7 +22,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <BrandMark />
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.filter((item) => item.visible(user)).map(({ to, label, icon: Icon }) => (
-          <li key={to}>
+          <li key={`${to}-${label}`}>
             <NavLink
               to={to}
               end={to === "/"}

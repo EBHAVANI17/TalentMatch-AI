@@ -20,6 +20,7 @@ import { api } from "@/lib/api/client";
 import type { Invitation, User } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { roleLabel } from "@/lib/auth/roles";
+import { OrganizationCard } from "@/features/home/HomePage";
 
 const INVITABLE_ROLES = ["RECRUITER", "HIRING_MANAGER", "INTERVIEWER", "ANALYST", "ORG_ADMIN"] as const;
 
@@ -139,6 +140,8 @@ export function TeamPage() {
           Invite member
         </Button>
       </div>
+
+      <OrganizationCard orgId={orgId} />
 
       <Card>
         <CardHeader

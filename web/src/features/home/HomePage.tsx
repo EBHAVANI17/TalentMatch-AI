@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, BadgeCheck, Briefcase, Building2, Cpu, MailWarning, Users } from "lucide-react";
-import { Badge, Button, Card, CardBody, CardHeader, ErrorState, Skeleton, useToast } from "@/components/ui";
+import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Skeleton, useToast } from "@/components/ui";
+import { formatDate } from "@/lib/format";
 import { CLASSIC_WORKSPACE_URL } from "@/app/navigation";
 import { api } from "@/lib/api/client";
-import type { MessageResponse, Organization } from "@/lib/api/types";
+import type { Application, MessageResponse, Organization } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { isCandidate, isOrgMember, roleLabel } from "@/lib/auth/roles";
 
@@ -42,7 +43,7 @@ function EmailVerificationNotice() {
   );
 }
 
-function OrganizationCard({ orgId }: { orgId: string }) {
+export function OrganizationCard({ orgId }: { orgId: string }) {
   const { data: org, isLoading, isError, refetch } = useQuery({
     queryKey: ["organization", orgId],
     queryFn: () => api<Organization>(`/organizations/${orgId}`),
@@ -81,9 +82,43 @@ function OrganizationCard({ orgId }: { orgId: string }) {
   );
 }
 
+// Tools that haven't moved to the new workspace yet.
+function MyApplications() {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["applications", "mine"],
+    queryFn: () => api<Application[]>("/applications"),
+  });
+  return (
+    <Card>
+      <CardHeader title="My applications" description="Where each application stands with the hiring team." />
+      <CardBody className="py-0">
+        {isLoading ? (
+          <div className="flex flex-col gap-2 py-4">{[0, 1].map((i) => <Skeleton key={i} className="h-10" />)}</div>
+        ) : isError ? (
+          <ErrorState message="Couldn't load your applications." onRetry={() => void refetch()} />
+        ) : !data?.length ? (
+          <EmptyState title="No applications yet" description="Apply to jobs from the classic workspace's recommended jobs." />
+        ) : (
+          <ul className="divide-y divide-border">
+            {data.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-fg">{a.job_title}</p>
+                  <p className="truncate text-xs text-muted">{a.company_name} · applied {formatDate(a.created_at)}</p>
+                </div>
+                <Badge tone={a.stage === "Rejected" ? "danger" : a.stage === "Hired" || a.stage === "Selected" ? "success" : "primary"}>{a.stage}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 const CLASSIC_LINKS_BY_AUDIENCE = {
-  org: ["Recruiting dashboard", "Job requisitions", "Candidate pipeline", "Talent match results", "AI sourcing and outreach"],
-  candidate: ["Recommended jobs", "Applications", "Resume studio", "Interview preparation", "Learning roadmap"],
+  org: ["Talent match results", "AI sourcing and outreach", "Interview tools"],
+  candidate: ["Recommended jobs", "Resume studio", "Interview preparation", "Learning roadmap"],
   admin: ["Platform health", "Organizations and plans", "Users", "Audit logs", "Skill taxonomy"],
 };
 
@@ -110,7 +145,7 @@ export function HomePage() {
 
       {!user.email_verified && <EmailVerificationNotice />}
 
-      {user.organization_id && <OrganizationCard orgId={user.organization_id} />}
+      {isCandidate(user) && <MyApplications />}
 
       <Card>
         <CardHeader

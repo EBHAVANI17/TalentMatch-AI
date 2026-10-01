@@ -22,6 +22,9 @@
   --font-display: "Outfit", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --shadow-card: var(--tm-shadow);
+  --color-viz-1: var(--tm-viz-1);
+  --color-viz-grid: var(--tm-viz-grid);
+  --color-viz-axis: var(--tm-viz-axis);
 }
 
 html,

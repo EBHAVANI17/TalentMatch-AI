@@ -138,6 +138,7 @@ def get_candidate_resumes(candidate_id: str, db: Session = Depends(get_db), ctx:
         results.append(ResumeOut(
             id=r.id,
             candidate_id=r.candidate_id,
+            document_id=r.document_id,
             title=r.title,
             original_filename=r.original_filename,
             file_format=r.file_format,
@@ -282,6 +283,7 @@ async def upload_and_process_resume(
     return ResumeOut(
         id=resume.id,
         candidate_id=resume.candidate_id,
+        document_id=resume.document_id,
         title=resume.title,
         original_filename=resume.original_filename,
         file_format=resume.file_format,

@@ -342,6 +342,7 @@ class ResumeOut(BaseModel):
     is_primary: bool = True
     processing_status: str = "Completed"
     created_at: Optional[datetime] = None
+    document_id: Optional[str] = None  # use POST /documents/{id}/download-url to download the file
     latest_analysis: Optional[ResumeAnalysisOut] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,8 @@
-import { Home, Users, type LucideIcon } from "lucide-react";
+import { Briefcase, Home, LayoutDashboard, UserRound, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { User } from "@/lib/api/types";
-import { isOrgAdmin, isSuperAdmin } from "@/lib/auth/roles";
+import { isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
+
+const hiringTeam = (u: User | null) => isOrgMember(u) || isSuperAdmin(u);
 
 export interface NavItem {
   to: string;
@@ -14,7 +16,11 @@ export interface NavItem {
  * from the classic workspace (frontend/index.html); see docs/DEVELOPMENT.md.
  */
 export const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Home", icon: Home, visible: () => true },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, visible: hiringTeam },
+  { to: "/", label: "Home", icon: Home, visible: isCandidate },
+  { to: "/jobs", label: "Jobs", icon: Briefcase, visible: hiringTeam },
+  { to: "/candidates", label: "Candidates", icon: UsersRound, visible: hiringTeam },
+  { to: "/profile", label: "My profile", icon: UserRound, visible: isCandidate },
   { to: "/team", label: "Team", icon: Users, visible: (u) => isOrgAdmin(u) || isSuperAdmin(u) },
 ];
 

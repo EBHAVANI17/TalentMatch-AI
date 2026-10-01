@@ -19,7 +19,7 @@ The new workspace is being built screen by screen next to the classic UI.
 | URL | What |
 |-----|------|
 | `/` | Classic UI (`frontend/index.html`), still the main workspace |
-| `/app` | New workspace (`web/`). Sign-in, account emails, Home, Team so far |
+| `/app` | New workspace (`web/`): sign-in and account pages, Dashboard, Jobs, Candidates, My profile, Team |
 
 Both share the same session (`nexus-token` in localStorage), so you can move between them.
 
@@ -128,3 +128,31 @@ infra/          Docker/Postgres setup (AWS Terraform comes later)
 - `tests/test_tenancy.py` is the cross-tenant suite. Add a case for every new tenant-owned endpoint.
 - Refresh tokens rotate and are single-use; replaying one ends all of that user's sessions.
 - Rate limits: `RATE_LIMIT_DEFAULT` per IP on `/api`, `RATE_LIMIT_AUTH` on login/sign-up/reset.
+
+## Events and background work
+
+Changes that other parts of the system care about are recorded as **domain events** in the
+`events_outbox` table, in the same transaction as the change (`app.events.emit`). Handlers in
+`app/events/handlers.py` react to them (today: notifications).
+
+- `EVENT_DISPATCH_MODE=inline` (default): events are delivered right after the request commits.
+- `EVENT_DISPATCH_MODE=worker` (Docker/production): run `python -m app.workers.outbox` alongside
+  the API (the `worker` service in docker-compose). Failed deliveries retry up to 5 times.
+
+Handlers must be idempotent: an event can be delivered more than once.
+
+Event names so far: `job.created|updated|published|paused|closed|archived`,
+`application.created`, `application.stage_changed`, `candidate.created|updated|note_added`.
+
+## File storage
+
+Uploaded files go through `app/adapters/storage` (`STORAGE_BACKEND=local` or `s3`). Only metadata
+is stored in the `documents` table. Downloads use short-lived links from
+`POST /api/v1/documents/{id}/download-url`. Resume files follow the same rule as contact details:
+an organization can open them only for candidates who applied to it or that it added.
+
+## Hiring pipeline
+
+Default stages: Applied, Screening, Shortlisted, Interview, Selected, Hired, Rejected. Organization
+admins can customize them (`PUT /api/v1/pipeline/stages`). Older names (AI Screened, Interviewing,
+Assessment, Offered) are accepted as aliases.

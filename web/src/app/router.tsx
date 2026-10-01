@@ -2,10 +2,19 @@ import { createBrowserRouter, useRouteError, type RouteObject } from "react-rout
 import { ButtonLink, EmptyState, ErrorState } from "@/components/ui";
 import { AcceptInvitationPage, ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from "@/features/auth/AccountPages";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { CandidateDetailPage } from "@/features/candidates/CandidateDetailPage";
+import { CandidatesPage } from "@/features/candidates/CandidatesPage";
+import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { HomePage } from "@/features/home/HomePage";
+import { JobDetailPage } from "@/features/jobs/JobDetailPage";
+import { JobFormPage } from "@/features/jobs/JobFormPage";
+import { JobsPage } from "@/features/jobs/JobsPage";
+import { MyProfilePage } from "@/features/profile/MyProfilePage";
 import { TeamPage } from "@/features/team/TeamPage";
 import { RedirectIfAuthenticated, RequireAuth, RequireRole } from "@/lib/auth/guards";
-import { isOrgAdmin, isSuperAdmin } from "@/lib/auth/roles";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
+import type { User } from "@/lib/api/types";
 import { AppShell } from "./layout/AppShell";
 
 function RouteErrorBoundary() {
@@ -21,6 +30,16 @@ function RouteErrorBoundary() {
     </div>
   );
 }
+
+const hiringTeam = (u: User | null) => isOrgMember(u) || isSuperAdmin(u);
+
+/** Candidates get their home page; hiring teams and admins get the dashboard. */
+function IndexPage() {
+  const { user } = useAuth();
+  return isCandidate(user) ? <HomePage /> : <DashboardPage />;
+}
+
+const hiring = (element: React.ReactNode) => <RequireRole allow={hiringTeam}>{element}</RequireRole>;
 
 function NotFoundPage() {
   return (
@@ -52,7 +71,14 @@ export const routes: RouteObject[] = [
           </RequireAuth>
         ),
         children: [
-          { index: true, element: <HomePage /> },
+          { index: true, element: <IndexPage /> },
+          { path: "jobs", element: hiring(<JobsPage />) },
+          { path: "jobs/new", element: hiring(<JobFormPage />) },
+          { path: "jobs/:jobId", element: hiring(<JobDetailPage />) },
+          { path: "jobs/:jobId/edit", element: hiring(<JobFormPage />) },
+          { path: "candidates", element: hiring(<CandidatesPage />) },
+          { path: "candidates/:candidateId", element: hiring(<CandidateDetailPage />) },
+          { path: "profile", element: <RequireRole allow={isCandidate}><MyProfilePage /></RequireRole> },
           {
             path: "team",
             element: (
