@@ -803,8 +803,11 @@ def _finalize_demo_data(db):
     """Fill fields the seed lists above don't set: normalized skills, tenant on applications, publish dates."""
     from app.services.skills_service import sync_all_skill_links
 
+    from app.services.pipeline_service import STAGE_ALIASES
+
     for application in db.query(Application).all():
         application.organization_id = application.job.organization_id if application.job else None
+        application.stage = STAGE_ALIASES.get((application.stage or "").lower(), application.stage)
     for job in db.query(Job).filter(Job.status == "Active", Job.published_at.is_(None)).all():
         job.published_at = job.created_at
     db.commit()

@@ -13,7 +13,8 @@ from app.models.schemas import (
     ApplicationOut, ApplicationSubmitRequest, ApplicationStageUpdateRequest
 )
 from app.services.recommender_service import calculate_match
-from app.services.notification_service import create_notification
+from app.events import emit
+from app.services.pipeline_service import move_application
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/applications", tags=["Applications Pipeline"])
@@ -111,22 +112,15 @@ def apply_to_job(
         score_breakdown_json=json.dumps(exp.breakdown.dict() if hasattr(exp.breakdown, 'dict') else exp.breakdown)
     )
     db.add(app)
-    
+
     # Increment applicant count on job
     job.applicants_count += 1
-    db.commit()
+    emit(db, "application.created", organization_id=job.organization_id, actor=current_user, payload={
+        "application_id": app_id, "job_id": job.id, "candidate_id": candidate.id,
+        "match_score": score, "source": app.source,
+    })
+    db.commit()  # notifications are sent by app/events/handlers.py once this commits
     db.refresh(app)
-
-    # Trigger In-App Notification
-    if candidate.user_id:
-        create_notification(
-            db=db,
-            user_id=candidate.user_id,
-            title=f"Application Sent: {job.title}",
-            message=f"Your profile matched with {score}% fit and has been dispatched to {job.organization.name if job.organization else 'the employer'}.",
-            notif_type="application",
-            link="/applications"
-        )
 
     log_audit_event(
         db=db,
@@ -154,31 +148,10 @@ def update_application_stage(
     app = get_org_application(db, ctx, app_id)
 
     old_stage = app.stage
-    app.stage = payload.stage
-    
-    # Record stage history
-    history_entry = ApplicationStageHistory(
-        id=f"hist_{uuid.uuid4().hex[:8]}",
-        application_id=app.id,
-        from_stage=old_stage,
-        to_stage=payload.stage,
-        changed_by_user_id=current_user.id,
-        reason=payload.reason or "Stage advanced"
-    )
-    db.add(history_entry)
-    db.commit()
+    if not move_application(db, app, payload.stage, current_user, payload.reason or ""):
+        return get_app_out(app)  # already in that stage
+    db.commit()  # history + application.stage_changed event are saved together
     db.refresh(app)
-
-    # Notify candidate of stage change
-    if app.candidate and app.candidate.user_id:
-        create_notification(
-            db=db,
-            user_id=app.candidate.user_id,
-            title=f"Pipeline Update: {app.job.title if app.job else 'Requisition'}",
-            message=f"Your application status was moved from {old_stage} to {payload.stage}.",
-            notif_type="stage_change",
-            link="/applications"
-        )
 
     log_audit_event(
         db=db,
@@ -189,7 +162,7 @@ def update_application_stage(
         user_id=current_user.id,
         user_email=current_user.email,
         organization_id=app.job.organization_id if app.job else None,
-        details={"old_stage": old_stage, "new_stage": payload.stage, "reason": payload.reason}
+        details={"old_stage": old_stage, "new_stage": app.stage, "reason": payload.reason}
     )
 
     return get_app_out(app)

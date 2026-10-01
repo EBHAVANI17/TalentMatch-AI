@@ -488,6 +488,7 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     type = Column(String(32), default="system") # application, stage_change, outreach, system
     link = Column(String(256), default="")
+    event_id = Column(String(64), nullable=True, index=True)  # outbox event that caused it (dedupes retries)
     is_read = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

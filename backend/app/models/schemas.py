@@ -603,8 +603,9 @@ class ApplicationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ApplicationCreate(BaseModel):
-    candidate_id: str
     job_id: str
+    # Candidates apply as themselves (leave empty); recruiters adding someone must set it.
+    candidate_id: Optional[str] = None
     cover_note: str = ""
 
 ApplicationSubmitRequest = ApplicationCreate

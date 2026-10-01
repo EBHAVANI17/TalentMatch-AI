@@ -271,14 +271,15 @@ def test_application_lifecycle_and_audit(auth):
         "reason": "Strong portfolio review and architectural screening"
     })
     assert stage_res.status_code == 200
-    assert stage_res.json()["stage"] == "Interviewing"
+    # Legacy stage names are accepted and stored as the pipeline's canonical name
+    assert stage_res.json()["stage"] == "Interview"
 
     # 3. Verify Stage History Audit Trail
     history_res = client.get(f"/api/v1/applications/{app_id}/history", headers=headers)
     assert history_res.status_code == 200
     history = history_res.json()
     assert len(history) >= 1
-    assert history[0]["to_stage"] == "Interviewing"
+    assert history[0]["to_stage"] == "Interview"
 
 
 def test_job_creation_with_copilot_spec(auth):

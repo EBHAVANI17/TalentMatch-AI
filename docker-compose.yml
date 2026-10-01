@@ -17,12 +17,35 @@ services:
       DEMO_MODE: ${DEMO_MODE:-true}
       DATABASE_URL: postgresql+psycopg://talentmatch:talentmatch@postgres:5432/talentmatch
       REDIS_URL: redis://redis:6379/0
+      EVENT_DISPATCH_MODE: worker
     volumes:
       - resume_storage:/srv/backend/storage
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Delivers domain events (notifications, later workflows/webhooks) from the outbox table.
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "app.workers.outbox"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+psycopg://talentmatch:talentmatch@postgres:5432/talentmatch
+      REDIS_URL: redis://redis:6379/0
+      EVENT_DISPATCH_MODE: worker
+      AUTO_MIGRATE: "false"
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
         condition: service_healthy
     restart: unless-stopped
 

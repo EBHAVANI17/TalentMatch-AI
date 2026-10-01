@@ -14,6 +14,7 @@ from app.api.analytics import router as analytics_router
 from app.api.notifications import router as notifications_router
 from app.api.admin import router as admin_router
 from app.api.system import router as system_router
+from app.api.pipeline import router as pipeline_router
 from app.core.tenancy import TenantContext, get_tenant
 from app.api.recommendations import jobs_for_candidate
 
@@ -33,6 +34,7 @@ router.include_router(analytics_router)
 router.include_router(notifications_router)
 router.include_router(admin_router)
 router.include_router(system_router)
+router.include_router(pipeline_router)
 
 # Legacy Backward-Compatibility Endpoint
 @router.get("/ai/recommend-jobs/{userId}", tags=["Legacy"])

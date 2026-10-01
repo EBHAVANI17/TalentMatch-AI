@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     rate_limit_default: str = "300/minute"  # any /api/ request
     rate_limit_auth: str = "10/minute"      # login and sign-up
 
+    # Domain events: "inline" delivers right after commit (dev/tests);
+    # "worker" leaves delivery to `python -m app.workers.outbox` (production).
+    event_dispatch_mode: str = "inline"
+    notification_email_enabled: bool = False
+
     # Matching
     weights: MatchingWeights = MatchingWeights()
 

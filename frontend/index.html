@@ -3040,7 +3040,7 @@
             <div>
               <div class="card" style="margin-bottom:16px">
                 <h3 style="font-family:var(--font-display);font-weight:700;font-size:0.95rem;margin-bottom:12px">Pipeline Summary</h3>
-                ${['Applied','AI Screened','Interview','Offered','Hired'].map(stage => {
+                ${['Applied','Screening','Interview','Selected','Hired'].map(stage => {
                   const count = apps.filter(a => a.stage === stage).length;
                   const pct = Math.round((count / Math.max(apps.length, 1)) * 100);
                   return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px"><span>${stage}</span><span style="font-weight:700">${count}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></div>`;
@@ -3065,7 +3065,7 @@
       } else if (section === 'pipeline') {
         const apps = await api('/applications');
         state.applications = apps;
-        const stages = ['Applied', 'AI Screened', 'Shortlisted', 'Interview', 'Offered', 'Hired'];
+        const stages = ['Applied', 'Screening', 'Shortlisted', 'Interview', 'Selected', 'Hired'];
         main.innerHTML = `
           <div class="page-header">
             <div class="page-title">Hiring Pipeline</div>
@@ -4316,10 +4316,10 @@
             <div style="display:flex;gap:8px">
               <select id="stage-select-${app.id}" class="form-input" style="flex:1">
                 <option value="Applied" ${app.stage === 'Applied' ? 'selected' : ''}>Applied</option>
-                <option value="AI Screened" ${app.stage === 'AI Screened' ? 'selected' : ''}>AI Screened</option>
+                <option value="Screening" ${app.stage === 'Screening' ? 'selected' : ''}>Screening</option>
                 <option value="Shortlisted" ${app.stage === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option>
                 <option value="Interview" ${app.stage === 'Interview' ? 'selected' : ''}>Interview</option>
-                <option value="Offered" ${app.stage === 'Offered' ? 'selected' : ''}>Offered</option>
+                <option value="Selected" ${app.stage === 'Selected' ? 'selected' : ''}>Selected</option>
                 <option value="Hired" ${app.stage === 'Hired' ? 'selected' : ''}>Hired</option>
                 <option value="Rejected" ${app.stage === 'Rejected' ? 'selected' : ''}>Rejected</option>
               </select>
@@ -4480,8 +4480,8 @@
 
     function stageBadge(stage) {
       const map = {
-        'Applied': 'badge-indigo', 'AI Screened': 'badge-cyan', 'Shortlisted': 'badge-violet',
-        'Interview': 'badge-amber', 'Assessment': 'badge-amber', 'Offered': 'badge-emerald',
+        'Applied': 'badge-indigo', 'Screening': 'badge-cyan', 'AI Screened': 'badge-cyan', 'Shortlisted': 'badge-violet',
+        'Interview': 'badge-amber', 'Assessment': 'badge-amber', 'Selected': 'badge-emerald', 'Offered': 'badge-emerald',
         'Hired': 'badge-emerald', 'Rejected': 'badge-rose'
       };
       return map[stage] || 'badge-indigo';
