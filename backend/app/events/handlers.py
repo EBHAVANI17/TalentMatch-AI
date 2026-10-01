@@ -85,3 +85,44 @@ def embed_job(db: Session, event: OutboxEvent) -> None:
     from app.models.db_models import Job
 
     _refresh_embedding(db, "job", db.get(Job, event.payload.get("job_id")))
+
+
+# ---------------------------------------------------------------------------
+# Candidate discovery when a job is published
+# ---------------------------------------------------------------------------
+STRONG_MATCH = 80
+
+
+@on("job.published")
+def discover_candidates(db: Session, event: OutboxEvent) -> None:
+    """Score the talent pool for a newly published job; tell the hiring team and strongly matching candidates."""
+    from app.matching import service as matching
+    from app.matching.embeddings import refresh
+    from app.models.db_models import Application as App, CandidateProfile, Job
+    from sqlalchemy import or_
+
+    job = db.get(Job, event.payload.get("job_id"))
+    if job is None or job.status != "Active":
+        return
+    refresh(db, "job", [job])
+    pool = db.query(CandidateProfile).filter(or_(
+        CandidateProfile.owner_org_id == job.organization_id,
+        CandidateProfile.owner_org_id.is_(None) & CandidateProfile.is_searchable.is_(True),
+    )).all()
+    rows = list(matching.ensure_matches(db, job, pool).values())
+    summary = matching.summarize(rows)
+
+    for member in _hiring_team(db, job.organization_id, None):
+        notify(db, member, kind="job", event_id=event.id, link=f"/app/talent-match?job={job.id}",
+               title=f"{summary['potential']} potentially relevant candidates for {job.title}",
+               message=f"{summary['strong']} strong matches (80%+) out of {summary['considered']} profiles reviewed.")
+
+    applied = {cid for (cid,) in db.query(App.candidate_id).filter(App.job_id == job.id)}
+    company = job.organization.name if job.organization else "A company"
+    for row in rows:
+        cand = row.candidate
+        if (row.score >= STRONG_MATCH and cand.owner_org_id is None and cand.availability != "not_looking"
+                and cand.id not in applied and cand.user and cand.user.is_active):
+            notify(db, cand.user, kind="job", event_id=event.id, link="/app/jobs-for-you",
+                   title=f"New job match: {job.title} at {company}",
+                   message=f"{row.score}% match to the role's listed requirements.")
