@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     s3_bucket_name: str = ""
     s3_endpoint_url: str = ""  # for S3-compatible stores (MinIO, R2); empty for AWS
 
+    # Embeddings for semantic matching/search.
+    #   fastembed: local ONNX model, no API key (downloads ~70 MB on first use)
+    #   hashing:   deterministic, offline, keyword-level only (tests / air-gapped installs)
+    embedding_provider: str = "fastembed"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # Fixed by the database column (pgvector). Changing it needs a migration.
+    embedding_dim: int = 384
+
     # Domain events: "inline" delivers right after commit (dev/tests);
     # "worker" leaves delivery to `python -m app.workers.outbox` (production).
     event_dispatch_mode: str = "inline"

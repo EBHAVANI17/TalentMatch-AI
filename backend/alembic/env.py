@@ -15,6 +15,13 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
+# Indexes created with raw SQL in migrations (e.g. pgvector HNSW) that the models can't express.
+MANUAL_INDEXES = {"ix_embeddings_vector_hnsw"}
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    return not (type_ == "index" and name in MANUAL_INDEXES)
+
 
 def _is_sqlite() -> bool:
     return settings.database_url.startswith("sqlite")
@@ -52,6 +59,7 @@ def _run(connection) -> None:
         target_metadata=target_metadata,
         render_as_batch=connection.dialect.name == "sqlite",
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

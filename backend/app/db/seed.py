@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.db.migrations import run_migrations
+from app.db.reference_data import ensure_reference_data
 from app.models.db_models import (
     Organization, User, CandidateProfile, WorkExperience, EducationRecord,
     CandidateProject, Resume, ResumeVersion, ResumeAnalysis, Job, Application,
@@ -19,6 +20,8 @@ def init_db():
         run_migrations()
     if settings.demo_mode:
         seed_demo_data()
+    with SessionLocal() as db:
+        ensure_reference_data(db)  # platform data (skill ontology); idempotent
 
 
 def seed_demo_data():

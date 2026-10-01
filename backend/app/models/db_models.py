@@ -3,8 +3,11 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, Index, Enum
+    Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, Index, Enum, LargeBinary
 )
+from pgvector.sqlalchemy import Vector
+
+from app.core.config import settings
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -29,6 +32,8 @@ class Organization(Base):
     max_active_jobs = Column(Integer, default=50)
     monthly_ai_credits = Column(Integer, default=5000)
     monthly_ai_credits_used = Column(Integer, default=0)
+    # Organization-specific weights for the matching engine (JSON object); empty = platform defaults
+    matching_weights_json = Column(Text, default="")
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -710,3 +715,113 @@ class OutboxEvent(Base):
             return json.loads(self.payload_json) if self.payload_json else {}
         except Exception:
             return {}
+
+
+# =========================================================================
+# 15. SKILL ONTOLOGY (SYNONYMS AND RELATED SKILLS)
+# =========================================================================
+class SkillAlias(Base):
+    """Another name for a catalog skill, e.g. "k8s" -> Kubernetes, "Postgres" -> PostgreSQL."""
+    __tablename__ = "skill_aliases"
+
+    id = Column(String(64), primary_key=True)
+    skill_id = Column(String(64), ForeignKey("skill_taxonomies.id", ondelete="CASCADE"), nullable=False, index=True)
+    alias = Column(String(128), nullable=False, unique=True, index=True)  # stored lower-case
+
+    skill = relationship("SkillTaxonomy")
+
+
+class SkillRelation(Base):
+    """Two skills that are related, with how much one counts as evidence for the other (0-1).
+
+    kind: "parent" (React -> JavaScript), "related" (Docker <-> Kubernetes), "transferable" (Java <-> C#)
+    """
+    __tablename__ = "skill_relations"
+
+    id = Column(String(64), primary_key=True)
+    skill_id = Column(String(64), ForeignKey("skill_taxonomies.id", ondelete="CASCADE"), nullable=False, index=True)
+    related_skill_id = Column(String(64), ForeignKey("skill_taxonomies.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(16), nullable=False, default="related")
+    weight = Column(Float, nullable=False, default=0.5)
+
+    __table_args__ = (Index("uq_skill_relation_pair", "skill_id", "related_skill_id", unique=True),)
+
+
+# =========================================================================
+# 16. EMBEDDINGS (SEMANTIC SEARCH AND MATCHING)
+# =========================================================================
+class Embedding(Base):
+    """One vector per (entity, model). pgvector on PostgreSQL; packed float32 bytes elsewhere."""
+    __tablename__ = "embeddings"
+
+    id = Column(String(64), primary_key=True)
+    entity_type = Column(String(16), nullable=False)  # candidate | job
+    entity_id = Column(String(64), nullable=False)
+    organization_id = Column(String(64), nullable=True, index=True)  # owner org for private records
+    model = Column(String(64), nullable=False)
+    content_hash = Column(String(64), nullable=False)  # skip re-embedding unchanged text
+    vector = Column(LargeBinary().with_variant(Vector(settings.embedding_dim), "postgresql"), nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (Index("uq_embedding_entity_model", "entity_type", "entity_id", "model", unique=True),)
+
+
+# =========================================================================
+# 17. PERSISTED MATCHES (EXPLAINABLE, VERSIONED)
+# =========================================================================
+class Match(Base):
+    """A computed candidate-to-job match, kept so ranking pages are fast and results are auditable."""
+    __tablename__ = "matches"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    candidate_id = Column(String(64), ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    score = Column(Integer, nullable=False)
+    fit_level = Column(String(32), nullable=False)
+    factors_json = Column(Text, nullable=False, default="[]")
+    strengths_json = Column(Text, nullable=False, default="[]")
+    gaps_json = Column(Text, nullable=False, default="[]")
+    matching_skills_json = Column(Text, nullable=False, default="[]")
+    missing_skills_json = Column(Text, nullable=False, default="[]")
+    explanation = Column(Text, nullable=False, default="")
+    engine_version = Column(String(16), nullable=False)
+    weights_hash = Column(String(16), nullable=False, default="")
+    # Recruiter decision from the Talent Match screen: new | shortlisted | dismissed
+    status = Column(String(16), nullable=False, default="new", index=True)
+    computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    candidate = relationship("CandidateProfile")
+    job = relationship("Job")
+
+    __table_args__ = (
+        Index("uq_match_job_candidate", "job_id", "candidate_id", unique=True),
+        Index("ix_matches_job_score", "job_id", "score"),
+    )
+
+    def _json(self, raw):
+        try:
+            return json.loads(raw) if raw else []
+        except Exception:
+            return []
+
+    @property
+    def factors(self):
+        return self._json(self.factors_json)
+
+    @property
+    def strengths(self):
+        return self._json(self.strengths_json)
+
+    @property
+    def gaps(self):
+        return self._json(self.gaps_json)
+
+    @property
+    def matching_skills(self):
+        return self._json(self.matching_skills_json)
+
+    @property
+    def missing_skills(self):
+        return self._json(self.missing_skills_json)
