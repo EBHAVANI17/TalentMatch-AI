@@ -68,15 +68,6 @@ export const routes: RouteObject[] = [
   },
 ];
 
-// Opt in to React Router v7 behaviour now so the eventual upgrade is a no-op.
-export const ROUTER_FUTURE = {
-  v7_relativeSplatPath: true,
-  v7_fetcherPersist: true,
-  v7_normalizeFormMethod: true,
-  v7_partialHydration: true,
-  v7_skipActionErrorRevalidation: true,
-} as const;
-
 export function createAppRouter() {
-  return createBrowserRouter(routes, { basename: "/app", future: ROUTER_FUTURE });
+  return createBrowserRouter(routes, { basename: "/app" });
 }

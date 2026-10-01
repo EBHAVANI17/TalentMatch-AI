@@ -2,7 +2,7 @@ import { render } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 import { AppProviders, makeQueryClient } from "@/app/providers";
-import { ROUTER_FUTURE, routes } from "@/app/router";
+import { routes } from "@/app/router";
 import type { TokenResponse, User } from "@/lib/api/types";
 
 type Handler = (init: RequestInit & { url: string }) => { status?: number; body?: unknown };
@@ -32,10 +32,10 @@ export function mockApi(handlers: Record<string, Handler>) {
 }
 
 export function renderApp(path = "/") {
-  const router = createMemoryRouter(routes, { initialEntries: [path], future: ROUTER_FUTURE });
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
   const utils = render(
     <AppProviders queryClient={makeQueryClient()}>
-      <RouterProvider router={router} future={{ v7_startTransition: true }} />
+      <RouterProvider router={router} />
     </AppProviders>,
   );
   return { ...utils, router };
