@@ -816,6 +816,12 @@ def _finalize_demo_data(db):
     db.commit()
     sync_all_skill_links(db)
 
+    from app.matching import embeddings
+
+    embeddings.refresh(db, "candidate", db.query(CandidateProfile).all())
+    embeddings.refresh(db, "job", db.query(Job).all())
+    db.commit()
+
 
 if __name__ == "__main__":
     run_migrations()

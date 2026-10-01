@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.services import account_service
 from app.services.audit_service import log_audit_event
+from app.events import emit
 from app.services.candidate_service import compute_profile_strength
 from app.services.skills_service import set_candidate_skills
 
@@ -131,6 +132,7 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
     db.flush()
     set_candidate_skills(db, profile, payload.skills)
     profile.profile_strength = compute_profile_strength(profile)
+    emit(db, "candidate.created", actor=user, payload={"candidate_id": cand_profile_id, "source": "self_registered"})
     db.commit()
     db.refresh(user)
 

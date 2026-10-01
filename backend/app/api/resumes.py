@@ -12,6 +12,7 @@ from app.models.db_models import (
 )
 from app.models.schemas import ResumeOut, ResumeAnalysisOut
 from app.services.audit_service import log_audit_event
+from app.events import emit
 from app.adapters.storage import get_storage
 from app.services import document_service
 from app.services.text_extraction import UnreadableDocument, extract_text
@@ -243,11 +244,13 @@ async def upload_and_process_resume(
         organization_id=None,
         user_id=current_user.id,
         operation_type="resume_parsing",
-        provider="NexusNLP-v2.5",
+        provider="rule-based",  # no AI model is involved in this analysis yet
         status="SUCCESS",
-        latency_ms=18,
-        tokens_consumed=450
+        latency_ms=0,
+        tokens_consumed=0
     ))
+    emit(db, "candidate.updated", organization_id=cand.owner_org_id, actor=current_user,
+         payload={"candidate_id": cand.id, "fields": ["resume"]})
 
     db.commit()
     db.refresh(resume)

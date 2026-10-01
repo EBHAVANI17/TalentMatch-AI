@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     # Fixed by the database column (pgvector). Changing it needs a migration.
     embedding_dim: int = 384
+    embedding_cache_dir: str = ""  # default backend/.cache/fastembed
 
     # Domain events: "inline" delivers right after commit (dev/tests);
     # "worker" leaves delivery to `python -m app.workers.outbox` (production).

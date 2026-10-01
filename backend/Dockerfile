@@ -20,6 +20,10 @@ WORKDIR /srv/backend
 COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
 
+# Bake the local embedding model into the image so containers never download it at runtime.
+ENV EMBEDDING_CACHE_DIR=/srv/models/fastembed
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/srv/models/fastembed')"
+
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/alembic ./alembic
 COPY backend/app ./app

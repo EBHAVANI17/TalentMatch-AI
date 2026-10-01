@@ -33,3 +33,4 @@ web/test-results/
 .DS_Store
 Thumbs.db
 web/openapi.json
+backend/.cache/

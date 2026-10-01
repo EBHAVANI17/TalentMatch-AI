@@ -58,3 +58,30 @@ def notify_stage_changed(db: Session, event: OutboxEvent) -> None:
     else:
         title, message = f"Application update: {job_title}", f"Your application moved to {to_stage}."
     notify(db, app.candidate.user, kind="stage_change", event_id=event.id, link="/applications", title=title, message=message)
+
+
+# ---------------------------------------------------------------------------
+# Keep semantic vectors current
+# ---------------------------------------------------------------------------
+def _refresh_embedding(db: Session, entity_type: str, obj) -> None:
+    from app.matching import embeddings
+
+    if obj is not None:
+        embeddings.refresh(db, entity_type, [obj])
+
+
+@on("candidate.created")
+@on("candidate.updated")
+def embed_candidate(db: Session, event: OutboxEvent) -> None:
+    from app.models.db_models import CandidateProfile
+
+    _refresh_embedding(db, "candidate", db.get(CandidateProfile, event.payload.get("candidate_id")))
+
+
+@on("job.created")
+@on("job.updated")
+@on("job.published")
+def embed_job(db: Session, event: OutboxEvent) -> None:
+    from app.models.db_models import Job
+
+    _refresh_embedding(db, "job", db.get(Job, event.payload.get("job_id")))
