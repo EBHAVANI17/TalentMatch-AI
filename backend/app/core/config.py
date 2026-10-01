@@ -98,6 +98,22 @@ class Settings(BaseSettings):
     embedding_dim: int = 384
     embedding_cache_dir: str = ""  # default backend/.cache/fastembed
 
+    # LLM providers (free tiers work). Tried in this order; providers without a key are skipped.
+    # With no keys at all, AI features use their deterministic rule-based fallbacks.
+    llm_provider_order: str = "groq,gemini,openrouter"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    openrouter_api_key: str = ""
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    llm_timeout_seconds: float = 25.0
+    llm_cooldown_seconds: int = 60      # skip a provider this long after a rate limit / outage
+    # Store model outputs in ai_requests for features whose outputs contain no personal data
+    ai_log_outputs: bool = True
+    # Per-user cap on AI calls per day (protects free-tier quotas); 0 = unlimited
+    ai_user_daily_limit: int = 100
+
     # Domain events: "inline" delivers right after commit (dev/tests);
     # "worker" leaves delivery to `python -m app.workers.outbox` (production).
     event_dispatch_mode: str = "inline"

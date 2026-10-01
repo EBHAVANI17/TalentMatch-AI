@@ -328,6 +328,8 @@ class Job(Base):
     seniority = Column(String(32), default="")
     industry = Column(String(64), default="")
     application_deadline = Column(DateTime, nullable=True)
+    screening_questions_json = Column(Text, default="[]")
+    interview_criteria_json = Column(Text, default="[]")
     published_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -356,6 +358,20 @@ class Job(Base):
     def responsibilities(self):
         try:
             return json.loads(self.responsibilities_json) if self.responsibilities_json else []
+        except Exception:
+            return []
+
+    @property
+    def screening_questions(self):
+        try:
+            return json.loads(self.screening_questions_json) if self.screening_questions_json else []
+        except Exception:
+            return []
+
+    @property
+    def interview_criteria(self):
+        try:
+            return json.loads(self.interview_criteria_json) if self.interview_criteria_json else []
         except Exception:
             return []
 
@@ -827,3 +843,53 @@ class Match(Base):
     @property
     def missing_skills(self):
         return self._json(self.missing_skills_json)
+
+
+# =========================================================================
+# 18. AI GOVERNANCE: EVERY MODEL CALL, VERSIONED PROMPTS
+# =========================================================================
+class AIRequest(Base):
+    """One AI feature invocation: who, which feature, which model and prompt version, outcome and cost.
+
+    Outputs are stored only for features whose output contains no personal data
+    (see app/ai/orchestrator.py); other features keep a reference instead.
+    """
+    __tablename__ = "ai_requests"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    feature = Column(String(48), nullable=False, index=True)        # resume_parse | job_generate | job_analyze | ...
+    status = Column(String(16), nullable=False, index=True)         # success | fallback | error | blocked
+    provider = Column(String(32), nullable=False, default="")       # groq | gemini | openrouter | rules
+    model = Column(String(96), nullable=False, default="")
+    prompt_key = Column(String(64), nullable=False, default="")
+    prompt_version = Column(Integer, nullable=True)
+    input_ref = Column(String(128), nullable=False, default="")     # e.g. "resume:res_123"
+    input_chars = Column(Integer, nullable=False, default=0)
+    output_json = Column(Text, nullable=True)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    credits = Column(Integer, nullable=False, default=0)
+    cost_usd = Column(Float, nullable=False, default=0.0)
+    latency_ms = Column(Integer, nullable=False, default=0)
+    attempts = Column(Text, nullable=False, default="[]")            # providers tried and why they failed
+    error = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PromptTemplate(Base):
+    """Versioned prompts. Exactly one active version per key; older versions stay for rollback and audit."""
+    __tablename__ = "prompt_templates"
+
+    id = Column(String(64), primary_key=True)
+    key = Column(String(64), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    status = Column(String(16), nullable=False, default="draft")  # draft | active | retired
+    system = Column(Text, nullable=False)
+    user_template = Column(Text, nullable=False)  # str.format placeholders, e.g. {resume_text}
+    notes = Column(Text, nullable=False, default="")
+    created_by_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (Index("uq_prompt_key_version", "key", "version", unique=True),)

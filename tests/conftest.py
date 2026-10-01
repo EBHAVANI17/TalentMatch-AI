@@ -26,6 +26,9 @@ os.environ.setdefault("RATE_LIMIT_AUTH", "100000/minute")
 os.environ.setdefault("REDIS_URL", "")
 os.environ.setdefault("PASSWORD_HASH_ITERATIONS", "1000")  # production default is 600k
 os.environ.setdefault("STORAGE_BACKEND", "local")
+# Tests never call real LLM APIs, even if keys exist in the developer's .env
+for _key in ("GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"):
+    os.environ[_key] = ""
 os.environ.setdefault("EMBEDDING_PROVIDER", "hashing")  # deterministic and offline; one test exercises fastembed
 os.environ.setdefault("STORAGE_LOCAL_DIR", os.path.join(_tmp_dir, "documents"))
 
