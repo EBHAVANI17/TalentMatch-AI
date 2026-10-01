@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     rate_limit_default: str = "300/minute"  # any /api/ request
     rate_limit_auth: str = "10/minute"      # login and sign-up
 
+    # File storage: local (backend/storage/documents) | s3
+    storage_backend: str = "local"
+    storage_local_dir: str = ""
+    max_upload_mb: int = 10
+    download_url_ttl_seconds: int = 300
+    aws_region: str = ""
+    s3_bucket_name: str = ""
+    s3_endpoint_url: str = ""  # for S3-compatible stores (MinIO, R2); empty for AWS
+
     # Domain events: "inline" delivers right after commit (dev/tests);
     # "worker" leaves delivery to `python -m app.workers.outbox` (production).
     event_dispatch_mode: str = "inline"

@@ -1,13 +1,10 @@
 import re
 import json
-import io
 from typing import List, Optional, Dict, Any
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import pypdf
-import docx
 
 from app.core.database import get_db
 from app.core.tenancy import (
@@ -20,7 +17,9 @@ from app.models.schemas import (
     CandidateDetailOut, CandidateNoteIn, CandidateNoteOut, CandidateProfileOut, CandidateProfileUpdate,
     SourcedCandidateCreate,
 )
+from app.core.config import settings
 from app.services import candidate_service
+from app.services.text_extraction import UnreadableDocument, extract_text
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/candidates", tags=["Candidates"])
@@ -196,70 +195,14 @@ async def upload_resume(
 ):
     content = await file.read()
     filename = file.filename or "resume.txt"
-    ext = filename.split(".")[-1].lower() if "." in filename else "txt"
     file_size = len(content)
-
-    detected_format = ext.upper()
-    text = ""
-
-    if ext == "pdf":
-        try:
-            reader = pypdf.PdfReader(io.BytesIO(content))
-            pages_text = [p.extract_text() or "" for p in reader.pages]
-            text = "\n".join(pages_text).strip()
-            if not text:
-                text = content.decode("utf-8", errors="ignore")
-        except Exception:
-            text = content.decode("utf-8", errors="ignore")
-    elif ext in ["docx", "doc"]:
-        try:
-            doc = docx.Document(io.BytesIO(content))
-            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-            text = "\n".join(paragraphs).strip()
-        except Exception:
-            text = content.decode("utf-8", errors="ignore")
-    elif ext == "json":
-        try:
-            data = json.loads(content.decode("utf-8", errors="ignore"))
-            if isinstance(data, dict):
-                parts = []
-                if "basics" in data:
-                    b = data["basics"]
-                    parts.append(f"{b.get('name', '')} - {b.get('label', '')}")
-                    if "summary" in b: parts.append(b["summary"])
-                    if "email" in b: parts.append(f"Email: {b['email']}")
-                if "skills" in data and isinstance(data["skills"], list):
-                    s_list = []
-                    for s in data["skills"]:
-                        if isinstance(s, dict):
-                            s_list.append(s.get("name", ""))
-                            if "keywords" in s: s_list.extend(s["keywords"])
-                        elif isinstance(s, str):
-                            s_list.append(s)
-                    parts.append(f"Skills: {', '.join(s_list)}")
-                if "work" in data and isinstance(data["work"], list):
-                    parts.append("Work Experience:")
-                    for w in data["work"]:
-                        if isinstance(w, dict):
-                            parts.append(f"{w.get('position', '')} at {w.get('name', '')} ({w.get('startDate', '')} - {w.get('endDate', 'Present')})")
-                            if "summary" in w: parts.append(w["summary"])
-                            if "highlights" in w and isinstance(w["highlights"], list):
-                                parts.extend([f"- {h}" for h in w["highlights"]])
-                if "education" in data and isinstance(data["education"], list):
-                    parts.append("Education:")
-                    for ed in data["education"]:
-                        if isinstance(ed, dict):
-                            parts.append(f"{ed.get('studyType', '')} in {ed.get('area', '')} from {ed.get('institution', '')}")
-                text = "\n".join(parts) if parts else json.dumps(data, indent=2)
-            else:
-                text = json.dumps(data, indent=2)
-        except Exception:
-            text = content.decode("utf-8", errors="ignore")
-    else:
-        text = content.decode("utf-8", errors="ignore")
-
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="Unable to extract readable text from the uploaded document.")
+    if file_size > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Files must be {settings.max_upload_mb} MB or smaller.")
+    try:
+        text = extract_text(filename, content)
+    except UnreadableDocument as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    detected_format = filename.rsplit(".", 1)[-1].upper() if "." in filename else "TXT"
 
     return analyze_resume_text(
         text=text,

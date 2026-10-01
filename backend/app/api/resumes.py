@@ -12,15 +12,16 @@ from app.models.db_models import (
 )
 from app.models.schemas import ResumeOut, ResumeAnalysisOut
 from app.services.audit_service import log_audit_event
+from app.adapters.storage import get_storage
+from app.services import document_service
+from app.services.text_extraction import UnreadableDocument, extract_text
 
 router = APIRouter(prefix="/resumes", tags=["Resume Intelligence Pipeline"])
 
-UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "storage", "resumes"))
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def safe_filename(name: str) -> str:
-    """Strip directories and unusual characters so uploads can't escape UPLOAD_DIR."""
+    """Strip directories and unusual characters so they are safe to use in storage keys and download headers."""
     base = os.path.basename(name.replace("\\", "/")).strip() or "resume"
     cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", base).lstrip(".")
     return cleaned[-120:] or "resume"
@@ -158,46 +159,28 @@ async def upload_and_process_resume(
 ):
     current_user = ctx.user
     cand = get_visible_candidate(db, ctx, candidate_id)
-    if not (ctx.is_super_admin or is_own_candidate_profile(ctx, cand)):
+    sourced_by_caller = ctx.is_org_member and cand.owner_org_id == ctx.org_id
+    if not (ctx.is_super_admin or is_own_candidate_profile(ctx, cand) or sourced_by_caller):
         raise HTTPException(status_code=403, detail="You can only upload resumes to your own profile")
     candidate_id = cand.id
 
-    # Validate File Extension & Size
     filename = safe_filename(file.filename or "resume.pdf")
-    ext = filename.split(".")[-1].lower()
-    if ext not in ["pdf", "docx", "txt"]:
-        raise HTTPException(status_code=400, detail="Unsupported file format. Please upload PDF, DOCX, or TXT.")
-
     contents = await file.read()
     file_size = len(contents)
-    if file_size > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
 
-    # Save File
-    cand_dir = os.path.join(UPLOAD_DIR, candidate_id)
-    os.makedirs(cand_dir, exist_ok=True)
-    saved_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
-    saved_path = os.path.join(cand_dir, saved_filename)
-    with open(saved_path, "wb") as f:
-        f.write(contents)
-
-    # Extract Text
-    extracted_text = ""
+    # Store the original file (validated by size and real content type), then read its text.
+    document = document_service.store_file(
+        db, data=contents, filename=filename, kind="resume", uploaded_by=current_user,
+        candidate=cand, organization_id=cand.owner_org_id,
+    )
     try:
-        if ext == "txt":
-            extracted_text = contents.decode("utf-8", errors="ignore")
-        elif ext == "pdf":
-            # Basic text extraction
-            extracted_text = contents.decode("latin-1", errors="ignore")
-            # If plain text strings found, clean them up
-            extracted_text = re.sub(r"[^\x20-\x7E\n]", " ", extracted_text)
-        else:
-            extracted_text = f"Uploaded {filename} with {file_size} bytes."
-    except Exception:
-        extracted_text = f"Standard text extraction for {filename}."
-
-    if len(extracted_text.strip()) < 20:
-        extracted_text = f"Candidate Resume ({filename}) — Verified technical engineering professional with deep systems expertise."
+        extracted_text = extract_text(filename, contents)
+    except UnreadableDocument as exc:
+        db.rollback()
+        get_storage().delete(document.storage_key)
+        raise HTTPException(status_code=422, detail=str(exc))
+    ext = filename.rsplit(".", 1)[-1].lower()
+    saved_path = document.storage_key
 
     # Multi-Dimension Analysis
     eval_result = analyze_resume_text_multidimension(extracted_text)
@@ -212,6 +195,7 @@ async def upload_and_process_resume(
         file_format=ext,
         file_size_bytes=file_size,
         file_storage_path=saved_path,
+        document_id=document.id,
         current_version=1,
         is_primary=True,
         processing_status="Parsed"
