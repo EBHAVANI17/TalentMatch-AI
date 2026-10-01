@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional
+from app.core.tenancy import TenantContext, get_tenant, get_visible_candidate, is_own_candidate_profile
 from app.models.db_models import (
     Resume, ResumeVersion, ResumeAnalysis, CandidateProfile, User, SkillTaxonomy, AIUsageRecord
 )
@@ -17,6 +17,13 @@ router = APIRouter(prefix="/resumes", tags=["Resume Intelligence Pipeline"])
 
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "storage", "resumes"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def safe_filename(name: str) -> str:
+    """Strip directories and unusual characters so uploads can't escape UPLOAD_DIR."""
+    base = os.path.basename(name.replace("\\", "/")).strip() or "resume"
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", base).lstrip(".")
+    return cleaned[-120:] or "resume"
 
 def analyze_resume_text_multidimension(text: str, target_skills: Optional[List[str]] = None) -> dict:
     """
@@ -103,7 +110,8 @@ def analyze_resume_text_multidimension(text: str, target_skills: Optional[List[s
     }
 
 @router.get("/candidate/{candidate_id}", response_model=List[ResumeOut])
-def get_candidate_resumes(candidate_id: str, db: Session = Depends(get_db)):
+def get_candidate_resumes(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    get_visible_candidate(db, ctx, candidate_id)
     resumes = db.query(Resume).filter(Resume.candidate_id == candidate_id).order_by(Resume.created_at.desc()).all()
     results = []
     for r in resumes:
@@ -146,10 +154,16 @@ async def upload_and_process_resume(
     file: UploadFile = File(...),
     candidate_id: str = Form(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    ctx: TenantContext = Depends(get_tenant)
 ):
+    current_user = ctx.user
+    cand = get_visible_candidate(db, ctx, candidate_id)
+    if not (ctx.is_super_admin or is_own_candidate_profile(ctx, cand)):
+        raise HTTPException(status_code=403, detail="You can only upload resumes to your own profile")
+    candidate_id = cand.id
+
     # Validate File Extension & Size
-    filename = file.filename or "resume.pdf"
+    filename = safe_filename(file.filename or "resume.pdf")
     ext = filename.split(".")[-1].lower()
     if ext not in ["pdf", "docx", "txt"]:
         raise HTTPException(status_code=400, detail="Unsupported file format. Please upload PDF, DOCX, or TXT.")
@@ -235,16 +249,14 @@ async def upload_and_process_resume(
     db.add(analysis)
 
     # Update Candidate Profile ATS Score
-    cand = db.query(CandidateProfile).filter(CandidateProfile.id == candidate_id).first()
-    if cand:
-        cand.ats_score = eval_result["overall"]
-        cand.raw_resume_text = extracted_text
+    cand.ats_score = eval_result["overall"]
+    cand.raw_resume_text = extracted_text
 
     # Record AI Telemetry
     db.add(AIUsageRecord(
         id=f"ai_{uuid.uuid4().hex[:8]}",
         organization_id=None,
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
         operation_type="resume_parsing",
         provider="NexusNLP-v2.5",
         status="SUCCESS",
@@ -261,8 +273,8 @@ async def upload_and_process_resume(
         module="Resumes",
         entity="Resume",
         entity_id=resume.id,
-        user_id=current_user.id if current_user else None,
-        user_email=current_user.email if current_user else "candidate",
+        user_id=current_user.id,
+        user_email=current_user.email,
         details={"filename": filename, "score": eval_result["overall"]}
     )
 

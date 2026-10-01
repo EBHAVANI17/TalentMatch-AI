@@ -247,8 +247,6 @@ def get_candidate_out(cand: CandidateProfile) -> CandidateProfileOut:
 def recommend_jobs_for_candidate_db(db: Session, candidate_id: str) -> List[JobMatchResult]:
     candidate = db.query(CandidateProfile).filter(CandidateProfile.id == candidate_id).first()
     if not candidate:
-        candidate = db.query(CandidateProfile).first()
-    if not candidate:
         return []
 
     jobs = db.query(Job).filter(Job.status == "Active").all()
@@ -265,14 +263,13 @@ def recommend_jobs_for_candidate_db(db: Session, candidate_id: str) -> List[JobM
 
     return sorted(results, key=lambda x: x.match_score, reverse=True)
 
-def recommend_candidates_for_job_db(db: Session, job_id: str) -> List[CandidateMatchResult]:
+def recommend_candidates_for_job_db(db: Session, job_id: str, candidate_query=None) -> List[CandidateMatchResult]:
+    """Rank candidates for a job. Pass a tenant-scoped candidate_query to limit who is considered."""
     job = db.query(Job).filter(Job.id == job_id).first()
-    if not job:
-        job = db.query(Job).first()
     if not job:
         return []
 
-    candidates = db.query(CandidateProfile).all()
+    candidates = (candidate_query if candidate_query is not None else db.query(CandidateProfile)).all()
     results = []
 
     # Get existing applications for pipeline stages

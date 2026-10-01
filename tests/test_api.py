@@ -50,14 +50,16 @@ def test_get_jobs():
     assert len(jobs) >= 5
     assert "required_skills" in jobs[0]
 
-def test_get_candidates():
-    response = client.get("/api/v1/candidates")
+def test_get_candidates(auth):
+    headers = auth("anthropic")
+    response = client.get("/api/v1/candidates", headers=headers)
     assert response.status_code == 200
     candidates = response.json()
     assert len(candidates) >= 4
 
-def test_ai_recommendations_for_candidate():
-    response = client.get("/api/v1/recommendations/jobs-for-candidate/cand_001")
+def test_ai_recommendations_for_candidate(auth):
+    headers = auth("aarav")
+    response = client.get("/api/v1/recommendations/jobs-for-candidate/cand_001", headers=headers)
     assert response.status_code == 200
     matches = response.json()
     assert len(matches) > 0
@@ -65,8 +67,9 @@ def test_ai_recommendations_for_candidate():
     assert "explanation" in matches[0]
     assert "breakdown" in matches[0]["explanation"]
 
-def test_ai_outreach_generation():
-    response = client.post("/api/v1/ai/generate-outreach", json={
+def test_ai_outreach_generation(auth):
+    headers = auth("anthropic")
+    response = client.post("/api/v1/ai/generate-outreach", headers=headers, json={
         "candidate_id": "cand_001",
         "job_id": "job_001",
         "tone": "Compelling & Visionary"
@@ -76,8 +79,9 @@ def test_ai_outreach_generation():
     assert "subject_line" in data
     assert "email_body" in data
 
-def test_ai_resume_tailor():
-    response = client.post("/api/v1/ai/tailor-resume", json={
+def test_ai_resume_tailor(auth):
+    headers = auth("aarav")
+    response = client.post("/api/v1/ai/tailor-resume", headers=headers, json={
         "candidate_id": "cand_001",
         "target_job_id": "job_001"
     })
@@ -86,8 +90,9 @@ def test_ai_resume_tailor():
     assert "ats_compatibility_score" in data
     assert len(data["bullet_point_enhancements"]) > 0
 
-def test_ai_interview_prep():
-    response = client.post("/api/v1/ai/interview-prep", json={
+def test_ai_interview_prep(auth):
+    headers = auth("aarav")
+    response = client.post("/api/v1/ai/interview-prep", headers=headers, json={
         "candidate_id": "cand_001",
         "job_id": "job_001"
     })
@@ -96,29 +101,33 @@ def test_ai_interview_prep():
     assert "questions" in data
     assert len(data["questions"]) >= 3
 
-def test_admin_system_stats():
-    response = client.get("/api/v1/admin/stats")
+def test_admin_system_stats(auth):
+    headers = auth("admin")
+    response = client.get("/api/v1/admin/stats", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total_users"] >= 5
     assert data["total_jobs"] >= 5
 
-def test_admin_audit_logs():
-    response = client.get("/api/v1/admin/audit-logs")
+def test_admin_audit_logs(auth):
+    headers = auth("admin")
+    response = client.get("/api/v1/admin/audit-logs", headers=headers)
     assert response.status_code == 200
     logs = response.json()
     assert len(logs) > 0
 
-def test_ai_auto_screen_application():
-    response = client.post("/api/v1/ai/auto-screen-application/app_001")
+def test_ai_auto_screen_application(auth):
+    headers = auth("anthropic")
+    response = client.post("/api/v1/ai/auto-screen-application/app_001", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "recommendation" in data
     assert "technical_fit_score" in data
     assert len(data["hiring_manager_probing_questions"]) > 0
 
-def test_ai_autonomous_sourcing():
-    response = client.post("/api/v1/ai/autonomous-sourcing", json={
+def test_ai_autonomous_sourcing(auth):
+    headers = auth("anthropic")
+    response = client.post("/api/v1/ai/autonomous-sourcing", headers=headers, json={
         "job_id": "job_001",
         "target_count": 3
     })
@@ -128,8 +137,9 @@ def test_ai_autonomous_sourcing():
     assert len(data["sourced_candidates"]) > 0
     assert len(data["sourced_candidates"][0]["outreach_sequence"]) == 3
 
-def test_ai_mock_interview_grader():
-    response = client.post("/api/v1/ai/mock-interview/grade-answer", json={
+def test_ai_mock_interview_grader(auth):
+    headers = auth("aarav")
+    response = client.post("/api/v1/ai/mock-interview/grade-answer", headers=headers, json={
         "question": "How do you handle distributed caching and cache invalidation?",
         "category": "System Design",
         "candidate_answer": "I use Redis cluster with write-through caching, consistent hashing for partitioning, and Kafka event stream invalidation to prevent stale data and maintain P99 latency.",
@@ -142,8 +152,9 @@ def test_ai_mock_interview_grader():
     assert "exemplary_model_answer" in data
     assert len(data["strengths"]) > 0
 
-def test_ai_job_spec_optimizer():
-    response = client.post("/api/v1/ai/optimize-job-spec", json={
+def test_ai_job_spec_optimizer(auth):
+    headers = auth("anthropic")
+    response = client.post("/api/v1/ai/optimize-job-spec", headers=headers, json={
         "raw_job_description": "Looking for a 10x rockstar ninja to dominate the market with 10+ years in Kubernetes and LLMs.",
         "job_title": "Staff AI Engineer"
     })
@@ -152,8 +163,9 @@ def test_ai_job_spec_optimizer():
     assert data["optimized_inclusivity_score"] > data["original_inclusivity_score"]
     assert "rockstar" not in data["optimized_job_description"].lower()
 
-def test_ai_learning_roadmap():
-    response = client.post("/api/v1/ai/learning-roadmap", json={
+def test_ai_learning_roadmap(auth):
+    headers = auth("aarav")
+    response = client.post("/api/v1/ai/learning-roadmap", headers=headers, json={
         "candidate_id": "cand_001",
         "target_job_id": "job_001"
     })
@@ -162,28 +174,32 @@ def test_ai_learning_roadmap():
     assert len(data["weeks"]) == 4
     assert data["projected_post_roadmap_score"] >= data["current_match_score"]
 
-def test_candidate_executive_dossier():
-    response = client.get("/api/v1/candidates/cand_001/dossier")
+def test_candidate_executive_dossier(auth):
+    headers = auth("anthropic")
+    response = client.get("/api/v1/candidates/cand_001/dossier", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "overall_readiness_grade" in data
     assert len(data["top_technical_superpowers"]) > 0
 
-def test_organizations_api():
-    response = client.get("/api/v1/organizations")
+def test_organizations_api(auth):
+    headers = auth("admin")
+    response = client.get("/api/v1/organizations", headers=headers)
     assert response.status_code == 200
     orgs = response.json()
     assert len(orgs) >= 3
     assert orgs[0]["plan_tier"] is not None
 
-def test_admin_users_api():
-    response = client.get("/api/v1/admin/users")
+def test_admin_users_api(auth):
+    headers = auth("admin")
+    response = client.get("/api/v1/admin/users", headers=headers)
     assert response.status_code == 200
     users = response.json()
     assert len(users) >= 5
 
-def test_admin_plans_api():
-    response = client.get("/api/v1/admin/plans")
+def test_admin_plans_api(auth):
+    headers = auth("admin")
+    response = client.get("/api/v1/admin/plans", headers=headers)
     assert response.status_code == 200
     plans = response.json()
     assert len(plans) >= 3
@@ -191,7 +207,8 @@ def test_admin_plans_api():
     assert any("Enterprise" in name for name in plan_names)
 
 
-def test_resume_upload_and_intelligence():
+def test_resume_upload_and_intelligence(auth):
+    headers = auth("aarav")
     sample_resume = b"""
     Aarav Sharma
     Senior AI & Distributed Systems Engineer
@@ -212,6 +229,7 @@ def test_resume_upload_and_intelligence():
     """
     response = client.post(
         "/api/v1/resumes/upload",
+        headers=headers,
         files={"file": ("aarav_resume.txt", sample_resume, "text/plain")},
         data={"candidate_id": "cand_001", "target_job_id": "job_001"}
     )
@@ -223,7 +241,8 @@ def test_resume_upload_and_intelligence():
     assert analysis["ats_compatibility_score"] >= 70
     assert len(analysis["findings"]) > 0
 
-def test_application_lifecycle_and_audit():
+def test_application_lifecycle_and_audit(auth):
+    headers = auth("stripe")
     from app.core.database import SessionLocal
     from app.models.db_models import Application, ApplicationStageHistory
     
@@ -236,7 +255,7 @@ def test_application_lifecycle_and_audit():
         db.commit()
 
     # 1. Submit Application
-    app_res = client.post("/api/v1/applications", json={
+    app_res = client.post("/api/v1/applications", headers=headers, json={
         "candidate_id": "cand_002",
         "job_id": "job_003",
         "cover_note": "Thrilled to apply for the Staff Systems role."
@@ -247,7 +266,7 @@ def test_application_lifecycle_and_audit():
     assert app_data["stage"] == "Applied"
 
     # 2. Advance Stage to Interview
-    stage_res = client.patch(f"/api/v1/applications/{app_id}/stage", json={
+    stage_res = client.patch(f"/api/v1/applications/{app_id}/stage", headers=headers, json={
         "stage": "Interviewing",
         "reason": "Strong portfolio review and architectural screening"
     })
@@ -255,16 +274,17 @@ def test_application_lifecycle_and_audit():
     assert stage_res.json()["stage"] == "Interviewing"
 
     # 3. Verify Stage History Audit Trail
-    history_res = client.get(f"/api/v1/applications/{app_id}/history")
+    history_res = client.get(f"/api/v1/applications/{app_id}/history", headers=headers)
     assert history_res.status_code == 200
     history = history_res.json()
     assert len(history) >= 1
     assert history[0]["to_stage"] == "Interviewing"
 
 
-def test_job_creation_with_copilot_spec():
+def test_job_creation_with_copilot_spec(auth):
+    headers = auth("anthropic")
     # 1. Test AI Spec Generation
-    spec_res = client.post("/api/v1/ai/generate-job-spec", json={
+    spec_res = client.post("/api/v1/ai/generate-job-spec", headers=headers, json={
         "title": "Principal Distributed Systems Architect"
     })
     assert spec_res.status_code == 200
@@ -273,7 +293,7 @@ def test_job_creation_with_copilot_spec():
     assert len(spec["required_skills"]) > 0
 
     # 2. Test Publishing Job
-    create_res = client.post("/api/v1/jobs", json={
+    create_res = client.post("/api/v1/jobs", headers=headers, json={
         "title": spec["title"],
         "department": spec.get("department", "Infrastructure"),
         "description": spec["description"],
@@ -296,38 +316,42 @@ def test_job_creation_with_copilot_spec():
     assert job["salary_max"] == 320000
 
 
-def test_notifications_lifecycle():
+def test_notifications_lifecycle(auth):
+    headers = auth("aarav")
     # 1. Fetch In-App Notifications
-    notifs_res = client.get("/api/v1/notifications")
+    notifs_res = client.get("/api/v1/notifications", headers=headers)
     assert notifs_res.status_code == 200
     notifs = notifs_res.json()
     assert len(notifs) > 0
 
     # 2. Mark First Notification as Read
     first_id = notifs[0]["id"]
-    patch_res = client.patch(f"/api/v1/notifications/{first_id}/read")
+    patch_res = client.patch(f"/api/v1/notifications/{first_id}/read", headers=headers)
     assert patch_res.status_code == 200
     assert patch_res.json()["is_read"] is True
 
 
-def test_admin_taxonomies_creation():
-    response = client.post("/api/v1/admin/taxonomies?name=Mojo&category=Languages&demand_level=High&avg_salary_boost=%2B20%25")
+def test_admin_taxonomies_creation(auth):
+    headers = auth("admin")
+    response = client.post("/api/v1/admin/taxonomies?name=Mojo&category=Languages&demand_level=High&avg_salary_boost=%2B20%25", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Mojo"
     assert data["category"] == "Languages"
 
 
-def test_organization_plan_update():
-    patch_res = client.patch("/api/v1/organizations/org_anthropic", json={
+def test_organization_plan_update(auth):
+    headers = auth("admin")
+    patch_res = client.patch("/api/v1/organizations/org_anthropic", headers=headers, json={
         "plan_tier": "Enterprise"
     })
     assert patch_res.status_code == 200
     assert patch_res.json()["plan_tier"] == "Enterprise"
 
 
-def test_user_status_update():
-    patch_res = client.patch("/api/v1/users/usr_cand_aarav/status", json={
+def test_user_status_update(auth):
+    headers = auth("admin")
+    patch_res = client.patch("/api/v1/users/usr_cand_aarav/status", headers=headers, json={
         "status": "Active"
     })
     assert patch_res.status_code == 200

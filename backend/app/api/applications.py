@@ -4,8 +4,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional
-from app.models.db_models import Application, Job, CandidateProfile, User
+from app.core.tenancy import (
+    TenantContext, get_tenant, scope_applications, get_visible_job,
+    get_visible_candidate, get_visible_application, get_org_application
+)
+from app.models.db_models import Application, ApplicationStageHistory
 from app.models.schemas import (
     ApplicationOut, ApplicationSubmitRequest, ApplicationStageUpdateRequest
 )
@@ -44,11 +47,12 @@ def get_app_out(app: Application) -> ApplicationOut:
 @router.get("", response_model=List[ApplicationOut])
 def get_applications(
     db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant),
     candidate_id: Optional[str] = Query(None),
     job_id: Optional[str] = Query(None),
     stage: Optional[str] = Query(None)
 ):
-    query = db.query(Application)
+    query = scope_applications(db.query(Application), ctx)
     if candidate_id:
         query = query.filter(Application.candidate_id == candidate_id)
     if job_id:
@@ -63,23 +67,26 @@ def get_applications(
 def apply_to_job(
     payload: ApplicationSubmitRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    ctx: TenantContext = Depends(get_tenant)
 ):
-    job = db.query(Job).filter(Job.id == payload.job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job requisition not found")
+    current_user = ctx.user
+    job = get_visible_job(db, ctx, payload.job_id)
 
-    candidate = None
-    if payload.candidate_id:
-        candidate = db.query(CandidateProfile).filter(CandidateProfile.id == payload.candidate_id).first()
-    elif current_user and current_user.candidate_profile:
+    if ctx.is_candidate:
+        # Candidates can only apply as themselves.
         candidate = current_user.candidate_profile
-    
-    if not candidate:
-        candidate = db.query(CandidateProfile).first()
-
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate profile not found")
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate profile not found")
+        if payload.candidate_id and payload.candidate_id != candidate.id:
+            raise HTTPException(status_code=403, detail="Candidates can only apply with their own profile")
+    else:
+        # Hiring side adds a candidate to one of its own organization's jobs.
+        ctx.require("applications:advance_stage")
+        if not ctx.is_super_admin and job.organization_id != ctx.org_id:
+            raise HTTPException(status_code=404, detail="Job requisition not found")
+        if not payload.candidate_id:
+            raise HTTPException(status_code=400, detail="candidate_id is required")
+        candidate = get_visible_candidate(db, ctx, payload.candidate_id)
 
     # Check existing application
     existing = db.query(Application).filter(
@@ -125,8 +132,9 @@ def apply_to_job(
         module="Applications",
         entity="Application",
         entity_id=app.id,
-        user_id=current_user.id if current_user else None,
-        user_email=current_user.email if current_user else "anonymous",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        organization_id=job.organization_id,
         details={"job_id": job.id, "match_score": score}
     )
 
@@ -137,13 +145,11 @@ def update_application_stage(
     app_id: str,
     payload: ApplicationStageUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    ctx: TenantContext = Depends(get_tenant)
 ):
-    from app.models.db_models import ApplicationStageHistory
-
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application record not found")
+    ctx.require("applications:advance_stage")
+    current_user = ctx.user
+    app = get_org_application(db, ctx, app_id)
 
     old_stage = app.stage
     app.stage = payload.stage
@@ -154,6 +160,7 @@ def update_application_stage(
         application_id=app.id,
         from_stage=old_stage,
         to_stage=payload.stage,
+        changed_by_user_id=current_user.id,
         reason=payload.reason or "Stage advanced"
     )
     db.add(history_entry)
@@ -177,16 +184,21 @@ def update_application_stage(
         module="Applications",
         entity="Application",
         entity_id=app.id,
-        user_id=current_user.id if current_user else None,
-        user_email=current_user.email if current_user else "anonymous",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        organization_id=app.job.organization_id if app.job else None,
         details={"old_stage": old_stage, "new_stage": payload.stage, "reason": payload.reason}
     )
 
     return get_app_out(app)
 
 @router.get("/{app_id}/history")
-def get_application_stage_history(app_id: str, db: Session = Depends(get_db)):
-    from app.models.db_models import ApplicationStageHistory
+def get_application_stage_history(
+    app_id: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
+):
+    get_visible_application(db, ctx, app_id)
     history = db.query(ApplicationStageHistory).filter(ApplicationStageHistory.application_id == app_id).order_by(ApplicationStageHistory.created_at.asc()).all()
     return history
 

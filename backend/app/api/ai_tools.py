@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.tenancy import (
+    TenantContext, get_tenant, require_permission,
+    get_visible_candidate, get_visible_job, get_managed_job, get_org_application
+)
 from app.models.schemas import (
     OutreachPitchRequest, OutreachPitchResponse,
     ResumeTailorRequest, ResumeTailorResponse,
@@ -20,10 +24,17 @@ from app.services.ai_copilot_service import (
     generate_learning_roadmap_db
 )
 
-router = APIRouter(prefix="/ai", tags=["AI Copilot & Automation"])
+# Every AI tool requires a signed-in user, and checks access to the records it reads.
+router = APIRouter(prefix="/ai", tags=["AI Copilot & Automation"], dependencies=[Depends(get_tenant)])
 
 @router.post("/generate-outreach", response_model=OutreachPitchResponse)
-def generate_outreach(payload: OutreachPitchRequest, db: Session = Depends(get_db)):
+def generate_outreach(
+    payload: OutreachPitchRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("candidates:search_pool"))
+):
+    get_visible_candidate(db, ctx, payload.candidate_id)
+    get_managed_job(db, ctx, payload.job_id)
     return generate_outreach_pitch_db(
         db=db,
         candidate_id=payload.candidate_id,
@@ -32,23 +43,34 @@ def generate_outreach(payload: OutreachPitchRequest, db: Session = Depends(get_d
     )
 
 @router.post("/tailor-resume", response_model=ResumeTailorResponse)
-def tailor_resume(payload: ResumeTailorRequest, db: Session = Depends(get_db)):
+def tailor_resume(payload: ResumeTailorRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    candidate_id = payload.candidate_id or ctx.candidate_id or ""
+    if candidate_id:
+        get_visible_candidate(db, ctx, candidate_id)
+    if payload.target_job_id:
+        get_visible_job(db, ctx, payload.target_job_id)
     return tailor_resume_db(
         db=db,
-        candidate_id=payload.candidate_id or "",
+        candidate_id=candidate_id,
         resume_text=payload.resume_text or "",
         target_job_id=payload.target_job_id
     )
 
 @router.post("/interview-prep", response_model=InterviewPrepResponse)
-def get_interview_prep(payload: InterviewPrepRequest, db: Session = Depends(get_db)):
+def get_interview_prep(payload: InterviewPrepRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    get_visible_candidate(db, ctx, payload.candidate_id)
+    get_visible_job(db, ctx, payload.job_id)
     return generate_interview_prep_db(
         db=db,
         candidate_id=payload.candidate_id,
         job_id=payload.job_id
     )
 
-@router.post("/generate-job-spec", response_model=JobSpecGenerateResponse)
+@router.post(
+    "/generate-job-spec",
+    response_model=JobSpecGenerateResponse,
+    dependencies=[Depends(require_permission("jobs:create_edit"))],
+)
 def generate_job_spec(payload: JobSpecGenerateRequest):
     query_prompt = payload.prompt or payload.title or "Staff Software Engineer"
     return generate_job_spec_db(
@@ -59,11 +81,21 @@ def generate_job_spec(payload: JobSpecGenerateRequest):
 
 
 @router.post("/auto-screen-application/{application_id}", response_model=AutoScreenApplicationResponse)
-def auto_screen_application(application_id: str, db: Session = Depends(get_db)):
+def auto_screen_application(
+    application_id: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("applications:view_tenant"))
+):
+    get_org_application(db, ctx, application_id)
     return auto_screen_application_db(db=db, application_id=application_id)
 
 @router.post("/autonomous-sourcing", response_model=AutonomousSourcingResponse)
-def autonomous_sourcing(payload: AutonomousSourcingRequest, db: Session = Depends(get_db)):
+def autonomous_sourcing(
+    payload: AutonomousSourcingRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("candidates:search_pool"))
+):
+    get_managed_job(db, ctx, payload.job_id)
     return autonomous_sourcing_db(
         db=db,
         job_id=payload.job_id,
@@ -81,7 +113,11 @@ def grade_mock_interview_answer(payload: MockInterviewGradeRequest):
         target_company=payload.target_company or "Top-tier Tech"
     )
 
-@router.post("/optimize-job-spec", response_model=JobSpecOptimizeResponse)
+@router.post(
+    "/optimize-job-spec",
+    response_model=JobSpecOptimizeResponse,
+    dependencies=[Depends(require_permission("jobs:create_edit"))],
+)
 def optimize_job_spec(payload: JobSpecOptimizeRequest):
     return optimize_job_spec_db(
         raw_job_description=payload.raw_job_description,
@@ -90,7 +126,9 @@ def optimize_job_spec(payload: JobSpecOptimizeRequest):
     )
 
 @router.post("/learning-roadmap", response_model=LearningRoadmapResponse)
-def generate_learning_roadmap(payload: LearningRoadmapRequest, db: Session = Depends(get_db)):
+def generate_learning_roadmap(payload: LearningRoadmapRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    get_visible_candidate(db, ctx, payload.candidate_id)
+    get_visible_job(db, ctx, payload.target_job_id)
     return generate_learning_roadmap_db(
         db=db,
         candidate_id=payload.candidate_id,

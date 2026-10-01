@@ -13,11 +13,13 @@ def log_audit_event(
     user_id: Optional[str] = None,
     user_email: str = "anonymous",
     details: Optional[Dict[str, Any]] = None,
-    ip_address: str = "127.0.0.1"
+    ip_address: str = "127.0.0.1",
+    organization_id: Optional[str] = None
 ):
     try:
         audit = AuditLog(
             id=f"audit_{uuid.uuid4().hex[:10]}",
+            organization_id=organization_id,
             user_id=user_id,
             user_email=user_email,
             action=action,

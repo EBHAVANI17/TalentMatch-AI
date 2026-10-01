@@ -3,13 +3,18 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.tenancy import require_super_admin
 from app.models.db_models import AuditLog, SkillTaxonomy, Plan, AIUsageRecord
 from app.models.schemas import (
     AdminSystemStats, AuditLogOut, SkillTaxonomyOut, PlanOut, AIUsageRecordOut
 )
 from app.services.analytics_service import get_admin_system_stats_db
 
-router = APIRouter(prefix="/admin", tags=["Super Admin & System Observability"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Super Admin & System Observability"],
+    dependencies=[Depends(require_super_admin)],
+)
 
 @router.get("/stats", response_model=AdminSystemStats)
 def get_system_stats(db: Session = Depends(get_db)):
@@ -20,7 +25,7 @@ def get_audit_logs(
     db: Session = Depends(get_db),
     module: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
-    limit: int = Query(50)
+    limit: int = Query(50, ge=1, le=500)
 ):
     query = db.query(AuditLog)
     if module and module != "all":

@@ -9,7 +9,9 @@ import pypdf
 import docx
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional
+from app.core.tenancy import (
+    TenantContext, get_tenant, scope_candidates, get_visible_candidate, is_own_candidate_profile
+)
 from app.models.db_models import CandidateProfile, SkillTaxonomy, User, Job
 from app.models.schemas import CandidateProfileOut, CandidateProfileUpdate
 from app.services.recommender_service import get_candidate_out
@@ -165,7 +167,11 @@ def analyze_resume_text(
     )
 
 @router.post("/parse-resume", response_model=ResumeParseResponse)
-def parse_resume(payload: ResumeParseRequest, db: Session = Depends(get_db)):
+def parse_resume(
+    payload: ResumeParseRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
+):
     return analyze_resume_text(
         text=payload.resume_text,
         detected_format=payload.format or "TEXT",
@@ -179,7 +185,8 @@ def parse_resume(payload: ResumeParseRequest, db: Session = Depends(get_db)):
 async def upload_resume(
     file: UploadFile = File(...),
     target_job_id: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
 ):
     content = await file.read()
     filename = file.filename or "resume.txt"
@@ -258,27 +265,26 @@ async def upload_resume(
     )
 
 @router.get("", response_model=List[CandidateProfileOut])
-def get_all_candidates(db: Session = Depends(get_db)):
-    candidates = db.query(CandidateProfile).all()
+def get_all_candidates(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    candidates = scope_candidates(db.query(CandidateProfile), ctx).all()
     return [get_candidate_out(c) for c in candidates]
 
 @router.get("/{candidate_id}", response_model=CandidateProfileOut)
-def get_candidate(candidate_id: str, db: Session = Depends(get_db)):
-    cand = db.query(CandidateProfile).filter(CandidateProfile.id == candidate_id).first()
-    if not cand:
-        raise HTTPException(status_code=404, detail="Candidate profile not found")
-    return get_candidate_out(cand)
+def get_candidate(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    return get_candidate_out(get_visible_candidate(db, ctx, candidate_id))
 
 @router.patch("/{candidate_id}", response_model=CandidateProfileOut)
 def update_candidate(
     candidate_id: str,
     payload: CandidateProfileUpdate,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    ctx: TenantContext = Depends(get_tenant)
 ):
-    cand = db.query(CandidateProfile).filter(CandidateProfile.id == candidate_id).first()
-    if not cand:
-        raise HTTPException(status_code=404, detail="Candidate profile not found")
+    current_user = ctx.user
+    cand = get_visible_candidate(db, ctx, candidate_id)
+    # A profile belongs to the candidate; only they (or a super admin) may edit it.
+    if not (ctx.is_super_admin or is_own_candidate_profile(ctx, cand)):
+        raise HTTPException(status_code=403, detail="You can only edit your own profile")
 
     if payload.title is not None: cand.title = payload.title
     if payload.bio is not None: cand.bio = payload.bio
@@ -301,13 +307,14 @@ def update_candidate(
         module="Candidates",
         entity="CandidateProfile",
         entity_id=cand.id,
-        user_id=current_user.id if current_user else None,
-        user_email=current_user.email if current_user else "anonymous"
+        user_id=current_user.id,
+        user_email=current_user.email
     )
 
     return get_candidate_out(cand)
 
 @router.get("/{candidate_id}/dossier")
-def get_candidate_dossier(candidate_id: str, db: Session = Depends(get_db)):
+def get_candidate_dossier(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
     from app.services.ai_copilot_service import generate_candidate_dossier_db
+    get_visible_candidate(db, ctx, candidate_id)
     return generate_candidate_dossier_db(db=db, candidate_id=candidate_id)

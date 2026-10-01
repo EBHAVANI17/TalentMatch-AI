@@ -13,7 +13,8 @@ from app.api.ai_tools import router as ai_tools_router
 from app.api.analytics import router as analytics_router
 from app.api.notifications import router as notifications_router
 from app.api.admin import router as admin_router
-from app.services.recommender_service import recommend_jobs_for_candidate_db
+from app.core.tenancy import TenantContext, get_tenant
+from app.api.recommendations import jobs_for_candidate
 
 router = APIRouter()
 
@@ -33,8 +34,8 @@ router.include_router(admin_router)
 
 # Legacy Backward-Compatibility Endpoint
 @router.get("/ai/recommend-jobs/{userId}", tags=["Legacy"])
-def get_recommendations_legacy(userId: str, db: Session = Depends(get_db)):
-    matches = recommend_jobs_for_candidate_db(db, userId)
+def get_recommendations_legacy(userId: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    matches = jobs_for_candidate(db, ctx, userId)
     return [
         {
             "jobId": m.job.id,

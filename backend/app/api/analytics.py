@@ -2,11 +2,13 @@ from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.tenancy import get_tenant
 from app.models.db_models import SkillTaxonomy
 from app.models.schemas import AnalyticsOverview, SkillTaxonomyOut
 from app.services.analytics_service import get_analytics_overview_db
 
-router = APIRouter(prefix="/analytics", tags=["Talent Market Radar"])
+# Market-level aggregates (counts, skill demand); no per-tenant records are returned.
+router = APIRouter(prefix="/analytics", tags=["Talent Market Radar"], dependencies=[Depends(get_tenant)])
 
 @router.get("/overview", response_model=AnalyticsOverview)
 def get_overview(db: Session = Depends(get_db)):

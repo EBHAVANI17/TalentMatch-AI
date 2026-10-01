@@ -37,3 +37,36 @@ def _seeded_database():
     init_db()  # runs migrations, then seeds demo data (DEMO_MODE=true)
     yield
     engine.dispose()
+
+
+# Demo personas from app/db/seed.py
+PERSONAS = {
+    "admin": ("admin@talentmatch.ai", "admin123"),              # SUPER_ADMIN
+    "anthropic": ("recruiter@anthropic.com", "anthropic123"),   # EMPLOYER_ADMIN, org_anthropic (job_001)
+    "stripe": ("recruiter@stripe.com", "stripe123"),            # EMPLOYER_ADMIN, org_stripe (job_003)
+    "aarav": ("aarav@stanford.edu", "aarav123"),                # CANDIDATE, cand_001
+    "elena": ("elena@cmu.edu", "elena123"),                     # CANDIDATE, cand_002
+}
+
+_token_cache = {}
+
+
+@pytest.fixture(scope="session")
+def client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    return TestClient(app)
+
+
+@pytest.fixture(scope="session")
+def auth(client):
+    """auth("anthropic") -> Authorization headers for that demo persona."""
+    def headers_for(persona: str) -> dict:
+        if persona not in _token_cache:
+            email, password = PERSONAS[persona]
+            res = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+            assert res.status_code == 200, res.text
+            _token_cache[persona] = res.json()["access_token"]
+        return {"Authorization": f"Bearer {_token_cache[persona]}"}
+    return headers_for
