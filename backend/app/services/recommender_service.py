@@ -109,6 +109,8 @@ def get_job_out(job: Job) -> JobOut:
         application_deadline=job.application_deadline,
         published_at=job.published_at,
         closed_at=job.closed_at,
+        screening_questions=job.screening_questions,
+        interview_criteria=job.interview_criteria,
         posted_date=(job.published_at or job.created_at).strftime("%Y-%m-%d"),
         created_at=job.created_at,
         updated_at=job.updated_at

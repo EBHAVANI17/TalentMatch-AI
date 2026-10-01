@@ -295,6 +295,8 @@ class SourcedCandidateCreate(CandidateProfileUpdate):
     full_name: str = Field(min_length=1, max_length=128)
     email: EmailStr
     title: str = Field("", max_length=128)
+    # From POST /ai/resume/parse (recruiter, no candidate yet): attach that file as their resume
+    resume_document_id: Optional[str] = None
 
 class CandidateNoteIn(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
@@ -382,6 +384,8 @@ class JobOut(BaseModel):
     application_deadline: Optional[datetime] = None
     published_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    screening_questions: List[str] = []
+    interview_criteria: List[str] = []
     posted_date: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -414,6 +418,8 @@ class JobCreate(BaseModel):
     required_education: str = "Bachelor's"
     urgency: str = "High"
     benefits: List[str] = ["Health & Dental", "Unlimited PTO", "401(k)"]
+    screening_questions: List[str] = Field(default_factory=list, max_length=20)
+    interview_criteria: List[str] = Field(default_factory=list, max_length=20)
     # Published immediately by default (classic UI behaviour); send "Draft" to save without publishing.
     status: Literal["Draft", "Active"] = "Active"
 
@@ -440,6 +446,8 @@ class JobUpdate(BaseModel):
     required_education: Optional[str] = None
     urgency: Optional[str] = None
     benefits: Optional[List[str]] = None
+    screening_questions: Optional[List[str]] = Field(None, max_length=20)
+    interview_criteria: Optional[List[str]] = Field(None, max_length=20)
 
 # =========================================================================
 # 6. VECTOR RECOMMENDER & EXPLAINABILITY SCHEMAS

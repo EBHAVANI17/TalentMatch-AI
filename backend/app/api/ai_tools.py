@@ -18,7 +18,7 @@ from app.models.schemas import (
 )
 from app.services.ai_copilot_service import (
     generate_outreach_pitch_db, tailor_resume_db,
-    generate_interview_prep_db, generate_job_spec_db,
+    generate_interview_prep_db,
     auto_screen_application_db, autonomous_sourcing_db,
     grade_mock_interview_db, optimize_job_spec_db,
     generate_learning_roadmap_db
@@ -71,12 +71,18 @@ def get_interview_prep(payload: InterviewPrepRequest, db: Session = Depends(get_
     response_model=JobSpecGenerateResponse,
     dependencies=[Depends(require_permission("jobs:create_edit"))],
 )
-def generate_job_spec(payload: JobSpecGenerateRequest):
-    query_prompt = payload.prompt or payload.title or "Staff Software Engineer"
-    return generate_job_spec_db(
-        prompt=query_prompt,
-        department=payload.department or "Engineering",
-        workplace_type=payload.workplace_type or "Remote"
+def generate_job_spec(payload: JobSpecGenerateRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    """Legacy shape over the real generator (/ai/jobs/generate)."""
+    from app.ai.features import generate_job
+
+    brief = payload.prompt or payload.title or "Software Engineer"
+    draft = generate_job(db, brief, user=ctx.user, organization_id=ctx.org_id).data
+    return JobSpecGenerateResponse(
+        title=draft.title, department=draft.department or payload.department or "Engineering",
+        description=draft.description, key_responsibilities=draft.responsibilities, responsibilities=draft.responsibilities,
+        required_skills=draft.required_skills, preferred_skills=draft.preferred_skills,
+        min_experience_years=draft.min_experience_years, salary_min=draft.salary_min or 0, salary_max=draft.salary_max or 0,
+        equity="", benefits=[],
     )
 
 

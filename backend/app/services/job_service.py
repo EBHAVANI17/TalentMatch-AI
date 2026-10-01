@@ -84,6 +84,8 @@ def create_job(db: Session, org: Organization, actor: User, payload: JobCreate) 
         urgency=payload.urgency,
         status=DRAFT,
         benefits_json=json.dumps(payload.benefits),
+        screening_questions_json=json.dumps(payload.screening_questions),
+        interview_criteria_json=json.dumps(payload.interview_criteria),
         applicants_count=0,
     )
     _validate_ranges(job)
@@ -116,6 +118,10 @@ def update_job(db: Session, job: Job, actor: User, payload: JobUpdate) -> Job:
         job.responsibilities_json = json.dumps(changes["key_responsibilities"] or [])
     if "benefits" in changes:
         job.benefits_json = json.dumps(changes["benefits"] or [])
+    if "screening_questions" in changes:
+        job.screening_questions_json = json.dumps(changes["screening_questions"] or [])
+    if "interview_criteria" in changes:
+        job.interview_criteria_json = json.dumps(changes["interview_criteria"] or [])
     if "required_skills" in changes or "preferred_skills" in changes:
         set_job_skills(
             db, job,
@@ -175,6 +181,8 @@ def duplicate_job(db: Session, job: Job, actor: User) -> Job:
         urgency=job.urgency,
         status=DRAFT,
         benefits_json=job.benefits_json,
+        screening_questions_json=job.screening_questions_json,
+        interview_criteria_json=job.interview_criteria_json,
         applicants_count=0,
     )
     db.add(copy)

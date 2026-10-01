@@ -200,4 +200,7 @@ def ensure_skill_ontology(db: Session) -> None:
 
 
 def ensure_reference_data(db: Session) -> None:
+    from app.ai.prompts import ensure_default_prompts
+
     ensure_skill_ontology(db)
+    ensure_default_prompts(db)

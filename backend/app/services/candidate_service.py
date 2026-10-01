@@ -258,10 +258,26 @@ def create_sourced_candidate(db: Session, ctx: TenantContext, payload: SourcedCa
     )
     db.add(cand)
     db.flush()
-    apply_profile_update(db, cand, CandidateProfileUpdate(**payload.model_dump(exclude={"email", "full_name"}, exclude_unset=True)), ctx.user)
+    apply_profile_update(db, cand, CandidateProfileUpdate(**payload.model_dump(exclude={"email", "full_name", "resume_document_id"}, exclude_unset=True)), ctx.user)
+    if payload.resume_document_id:
+        _attach_parsed_resume(db, ctx, cand, payload.resume_document_id)
     emit(db, "candidate.created", organization_id=ctx.org_id, actor=ctx.user,
          payload={"candidate_id": cand.id, "source": "recruiter"})
     return cand
+
+
+def _attach_parsed_resume(db: Session, ctx: TenantContext, cand: CandidateProfile, document_id: str) -> None:
+    from app.adapters.storage import get_storage
+    from app.ai.features import save_resume
+    from app.models.db_models import Document
+    from app.services.text_extraction import extract_text
+
+    document = db.get(Document, document_id)
+    if document is None or document.organization_id != ctx.org_id or document.candidate_id is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resume file not found")
+    text = extract_text(document.filename, get_storage().get(document.storage_key))
+    save_resume(db, candidate=cand, document=document, text=text, draft=None)
+    cand.profile_strength = compute_profile_strength(cand)
 
 
 # ---------------------------------------------------------------------------

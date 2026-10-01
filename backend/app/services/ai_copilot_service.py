@@ -182,52 +182,6 @@ def generate_interview_prep_db(db: Session, candidate_id: str, job_id: str) -> I
         questions=questions
     )
 
-def generate_job_spec_db(prompt: str, department: str, workplace_type: str) -> JobSpecGenerateResponse:
-    p_lower = prompt.lower()
-
-    if "ai" in p_lower or "llm" in p_lower or "machine learning" in p_lower:
-        title = "Staff AI Systems & LLM Platform Engineer"
-        desc = "Architect high-performance generative AI pipelines, model inference accelerators, and enterprise retrieval engines at scale."
-        req = ["Python", "PyTorch", "LLMs & RAG", "CUDA & GPU Optimization", "FastAPI", "Vector Databases"]
-        pref = ["Kubernetes", "Docker", "PostgreSQL & pgvector"]
-        sal_min, sal_max = 185000, 235000
-    elif "frontend" in p_lower or "full stack" in p_lower or "react" in p_lower or "next" in p_lower:
-        title = "Principal Full Stack & Web Architecture Engineer"
-        desc = "Lead full-stack engineering, interactive design systems, and resilient cloud services trusted by thousands of enterprise clients."
-        req = ["TypeScript", "Next.js", "React", "Node.js", "PostgreSQL & pgvector", "AWS"]
-        pref = ["Distributed Systems", "Docker", "CI/CD & GitOps"]
-        sal_min, sal_max = 175000, 220000
-    elif "rust" in p_lower or "go" in p_lower or "backend" in p_lower or "distributed" in p_lower:
-        title = "Staff Distributed Systems & Infrastructure Engineer"
-        desc = "Engineer high-throughput transactional backends, distributed consensus clusters, and fault-tolerant cloud services."
-        req = ["Go", "Rust", "Distributed Systems", "System Design", "Microservices", "PostgreSQL & pgvector"]
-        pref = ["Kubernetes", "Docker", "AWS"]
-        sal_min, sal_max = 180000, 230000
-    else:
-        title = "Senior Platform & Cloud Reliability Engineer"
-        desc = "Design multi-region cloud infrastructure, automated GitOps deployment pipelines, and zero-trust security architecture."
-        req = ["AWS", "Kubernetes", "Terraform", "Docker", "CI/CD & GitOps", "Python"]
-        pref = ["Go", "Distributed Systems", "System Design"]
-        sal_min, sal_max = 170000, 215000
-
-    return JobSpecGenerateResponse(
-        title=title,
-        department=department or "Engineering",
-        description=desc,
-        key_responsibilities=[
-            f"Lead architectural design and development of core {req[0]} services.",
-            "Collaborate cross-functionally with Product, Design, and Security squads.",
-            "Mentor senior engineers and drive engineering excellence and reliability."
-        ],
-        required_skills=req,
-        preferred_skills=pref,
-        min_experience_years=5.5,
-        salary_min=sal_min,
-        salary_max=sal_max,
-        equity="0.1% - 0.25%",
-        benefits=["100% Remote Flexibility", "Unlimited PTO", "Full Medical/Dental/Vision", "Annual Tech & Home Office Stipend"]
-    )
-
 def auto_screen_application_db(db: Session, application_id: str):
     from app.models.db_models import Application
     from app.services.recommender_service import calculate_match
