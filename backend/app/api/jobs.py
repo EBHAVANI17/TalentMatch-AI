@@ -1,26 +1,40 @@
-import json
-import uuid
-from typing import List, Optional
+from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.tenancy import (
-    TenantContext, get_tenant_optional, require_permission, scope_jobs, get_visible_job
+    TenantContext, get_tenant_optional, require_permission, scope_jobs, get_visible_job, get_managed_job
 )
-from app.models.db_models import Job
-from app.models.schemas import JobOut, JobCreate
+from app.models.db_models import Job, Organization
+from app.models.schemas import JobOut, JobCreate, JobUpdate
+from app.services import job_service
 from app.services.recommender_service import get_job_out
 from app.services.audit_service import log_audit_event
-from app.services.skills_service import set_job_skills
 
 router = APIRouter(prefix="/jobs", tags=["Job Requisitions"])
+
+LifecycleAction = Literal["publish", "pause", "close", "archive"]
+
+
+def _audit(db: Session, ctx: TenantContext, action: str, job: Job, details: Optional[dict] = None) -> None:
+    log_audit_event(
+        db=db, action=action, module="Jobs", entity="Job", entity_id=job.id,
+        user_id=ctx.user.id, user_email=ctx.user.email, organization_id=job.organization_id,
+        details={"title": job.title, "status": job.status, **(details or {})},
+    )
+
 
 @router.get("", response_model=List[JobOut])
 def get_all_jobs(
     db: Session = Depends(get_db),
     ctx: Optional[TenantContext] = Depends(get_tenant_optional),
     organization_id: Optional[str] = Query(None),
-    status: Optional[str] = Query("Active")
+    status: Optional[str] = Query("Active", description="Draft, Active, Paused, Closed, Archived, or 'all'"),
+    q: Optional[str] = Query(None, max_length=100, description="Search title, department and location"),
+    department: Optional[str] = Query(None),
+    workplace_type: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=500),
 ):
     # Anonymous users and candidates see the public (Active) job board;
     # organization members see their own organization's requisitions.
@@ -29,7 +43,14 @@ def get_all_jobs(
         query = query.filter(Job.status == status)
     if organization_id:
         query = query.filter(Job.organization_id == organization_id)
-    jobs = query.order_by(Job.created_at.desc()).all()
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(Job.title.ilike(like), Job.department.ilike(like), Job.location.ilike(like)))
+    if department:
+        query = query.filter(Job.department == department)
+    if workplace_type:
+        query = query.filter(Job.workplace_type == workplace_type)
+    jobs = query.order_by(Job.created_at.desc()).limit(limit).all()
     return [get_job_out(j) for j in jobs]
 
 @router.get("/{job_id}", response_model=JobOut)
@@ -46,52 +67,57 @@ def create_job(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permission("jobs:create_edit"))
 ):
-    current_user = ctx.user
-    org_id = ctx.org_id
-    if not org_id:
+    if not ctx.org_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Job requisitions must belong to an organization"
         )
-    job_id = f"job_{uuid.uuid4().hex[:8]}"
-
-    job = Job(
-        id=job_id,
-        organization_id=org_id,
-        created_by_user_id=current_user.id,
-        title=payload.title,
-        department=payload.department,
-        description=payload.description,
-        responsibilities_json=json.dumps(payload.key_responsibilities),
-        required_skills_json=json.dumps(payload.required_skills),
-        preferred_skills_json=json.dumps(payload.preferred_skills),
-        min_experience_years=payload.min_experience_years,
-        location=payload.location,
-        workplace_type=payload.workplace_type,
-        salary_min=payload.salary_min,
-        salary_max=payload.salary_max,
-        equity=payload.equity,
-        required_education=payload.required_education,
-        urgency=payload.urgency,
-        status="Active",
-        benefits_json=json.dumps(payload.benefits),
-        applicants_count=0
-    )
-    db.add(job)
-    set_job_skills(db, job, payload.required_skills, payload.preferred_skills)
+    org = db.get(Organization, ctx.org_id)
+    job = job_service.create_job(db, org, ctx.user, payload)
     db.commit()
     db.refresh(job)
+    _audit(db, ctx, "JOB_CREATED", job, {"organization_id": org.id})
+    return get_job_out(job)
 
-    log_audit_event(
-        db=db,
-        action="JOB_CREATED",
-        module="Jobs",
-        entity="Job",
-        entity_id=job.id,
-        user_id=current_user.id,
-        user_email=current_user.email,
-        organization_id=org_id,
-        details={"title": payload.title, "organization_id": org_id}
-    )
+@router.patch("/{job_id}", response_model=JobOut)
+def update_job(
+    job_id: str,
+    payload: JobUpdate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("jobs:create_edit"))
+):
+    job = get_managed_job(db, ctx, job_id)
+    job_service.update_job(db, job, ctx.user, payload)
+    db.commit()
+    db.refresh(job)
+    _audit(db, ctx, "JOB_UPDATED", job, {"fields": sorted(payload.model_dump(exclude_unset=True).keys())})
+    return get_job_out(job)
 
+@router.post("/{job_id}/duplicate", response_model=JobOut, status_code=201)
+def duplicate_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("jobs:create_edit"))
+):
+    """Copy a requisition (any status) into a new Draft."""
+    source = get_managed_job(db, ctx, job_id)
+    copy = job_service.duplicate_job(db, source, ctx.user)
+    db.commit()
+    db.refresh(copy)
+    _audit(db, ctx, "JOB_DUPLICATED", copy, {"duplicated_from": source.id})
+    return get_job_out(copy)
+
+@router.post("/{job_id}/{action}", response_model=JobOut)
+def change_job_status(
+    job_id: str,
+    action: LifecycleAction,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("jobs:create_edit"))
+):
+    """Lifecycle: publish (Draft/Paused/Closed -> Active), pause, close, archive."""
+    job = get_managed_job(db, ctx, job_id)
+    job_service.transition(db, job, action, ctx.user)
+    db.commit()
+    db.refresh(job)
+    _audit(db, ctx, f"JOB_{action.upper()}", job)
     return get_job_out(job)

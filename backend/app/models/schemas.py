@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Literal, Optional, Dict, Any, Union
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
@@ -275,41 +275,75 @@ class JobOut(BaseModel):
     equity: str = "0.1% - 0.25%"
     required_education: str = "Bachelor's"
     urgency: str = "High"
-    status: str = "Active"
+    status: str = "Active"  # Draft | Active (published) | Paused | Closed | Archived
     benefits: List[str] = []
     applicants_count: int = 0
+    employment_type: str = "Full-time"
+    openings: int = 1
+    max_experience_years: Optional[float] = None
+    seniority: str = ""
+    industry: str = ""
+    application_deadline: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
     posted_date: str = ""
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
+WorkplaceType = Literal["Remote", "Hybrid", "Onsite"]
+EmploymentType = Literal["Full-time", "Part-time", "Contract", "Internship", "Temporary"]
+
 class JobCreate(BaseModel):
-    organization_id: Optional[str] = None
-    title: str
-    department: str = "Engineering"
-    description: str
+    organization_id: Optional[str] = None  # ignored: jobs are always created in the caller's organization
+    title: str = Field(min_length=2, max_length=128)
+    department: str = Field("Engineering", max_length=64)
+    description: str = Field(min_length=1, max_length=20000)
     key_responsibilities: List[str] = []
-    required_skills: List[str] = []
-    preferred_skills: List[str] = []
-    min_experience_years: float = 3.0
-    location: str = "San Francisco, CA"
+    required_skills: List[str] = Field(default_factory=list, max_length=50)
+    preferred_skills: List[str] = Field(default_factory=list, max_length=50)
+    min_experience_years: float = Field(3.0, ge=0, le=50)
+    max_experience_years: Optional[float] = Field(None, ge=0, le=60)
+    location: str = Field("San Francisco, CA", max_length=128)
     workplace_type: str = "Remote"
-    salary_min: int = 140000
-    salary_max: int = 190000
+    employment_type: EmploymentType = "Full-time"
+    openings: int = Field(1, ge=1, le=1000)
+    seniority: str = Field("", max_length=32)
+    industry: str = Field("", max_length=64)
+    application_deadline: Optional[datetime] = None
+    salary_min: int = Field(140000, ge=0)
+    salary_max: int = Field(190000, ge=0)
     equity: str = "0.1% - 0.25%"
     required_education: str = "Bachelor's"
     urgency: str = "High"
     benefits: List[str] = ["Health & Dental", "Unlimited PTO", "401(k)"]
+    # Published immediately by default (classic UI behaviour); send "Draft" to save without publishing.
+    status: Literal["Draft", "Active"] = "Active"
 
 class JobUpdate(BaseModel):
-    title: Optional[str] = None
-    department: Optional[str] = None
-    description: Optional[str] = None
-    required_skills: Optional[List[str]] = None
-    preferred_skills: Optional[List[str]] = None
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    status: Optional[str] = None
+    """Partial update: only fields that are sent are changed. Status changes use the lifecycle actions."""
+    title: Optional[str] = Field(None, min_length=2, max_length=128)
+    department: Optional[str] = Field(None, max_length=64)
+    description: Optional[str] = Field(None, min_length=1, max_length=20000)
+    key_responsibilities: Optional[List[str]] = None
+    required_skills: Optional[List[str]] = Field(None, max_length=50)
+    preferred_skills: Optional[List[str]] = Field(None, max_length=50)
+    min_experience_years: Optional[float] = Field(None, ge=0, le=50)
+    max_experience_years: Optional[float] = Field(None, ge=0, le=60)
+    location: Optional[str] = Field(None, max_length=128)
+    workplace_type: Optional[str] = None
+    employment_type: Optional[EmploymentType] = None
+    openings: Optional[int] = Field(None, ge=1, le=1000)
+    seniority: Optional[str] = Field(None, max_length=32)
+    industry: Optional[str] = Field(None, max_length=64)
+    application_deadline: Optional[datetime] = None
+    salary_min: Optional[int] = Field(None, ge=0)
+    salary_max: Optional[int] = Field(None, ge=0)
+    equity: Optional[str] = None
+    required_education: Optional[str] = None
+    urgency: Optional[str] = None
+    benefits: Optional[List[str]] = None
 
 # =========================================================================
 # 6. VECTOR RECOMMENDER & EXPLAINABILITY SCHEMAS

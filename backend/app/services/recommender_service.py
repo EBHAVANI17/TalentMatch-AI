@@ -13,7 +13,7 @@ def _calc_tfidf_cosine(cand_skills: List[str], job_skills: List[str]) -> float:
     job_tokens = [s.lower().strip() for s in job_skills if s.strip()]
     if not cand_tokens or not job_tokens:
         return 0.0
-    
+
     vocab = list(set(cand_tokens + job_tokens))
     c_count = Counter(cand_tokens)
     j_count = Counter(job_tokens)
@@ -218,8 +218,17 @@ def get_job_out(job: Job) -> JobOut:
         status=job.status,
         benefits=job.benefits,
         applicants_count=job.applicants_count,
-        posted_date=job.created_at.strftime("%Y-%m-%d"),
-        created_at=job.created_at
+        employment_type=job.employment_type or "Full-time",
+        openings=job.openings or 1,
+        max_experience_years=job.max_experience_years,
+        seniority=job.seniority or "",
+        industry=job.industry or "",
+        application_deadline=job.application_deadline,
+        published_at=job.published_at,
+        closed_at=job.closed_at,
+        posted_date=(job.published_at or job.created_at).strftime("%Y-%m-%d"),
+        created_at=job.created_at,
+        updated_at=job.updated_at
     )
 
 def get_candidate_out(cand: CandidateProfile) -> CandidateProfileOut:
