@@ -166,6 +166,7 @@ def seed_demo_data():
         db.flush()
 
         # 5. Seed Candidates & Sub-Entities
+        pending_resume_analyses = []
         candidates_raw = [
             {
                 "user_id": "usr_cand_aarav",
@@ -425,7 +426,8 @@ def seed_demo_data():
                 parsed_payload_json=json.dumps({"skills": c["skills"], "experience_years": c["experience_years"]})
             ))
 
-            db.add(ResumeAnalysis(
+            # Added after jobs exist: target_job_id has a foreign key to jobs
+            pending_resume_analyses.append(ResumeAnalysis(
                 id=f"ranal_{uuid.uuid4().hex[:8]}",
                 resume_id=resume.id,
                 target_job_id="job_001",
@@ -597,6 +599,8 @@ def seed_demo_data():
                 applicants_count=j["applicants"]
             )
             db.add(job)
+        db.flush()
+        db.add_all(pending_resume_analyses)
         db.flush()
 
         # 7. Seed Applications, Stage Histories & Interviews

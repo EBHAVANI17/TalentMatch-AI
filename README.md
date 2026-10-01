@@ -8,6 +8,9 @@
 
 > A production-grade, autonomous talent intelligence SaaS platform connecting elite engineering candidates with tier-1 technology organizations using multi-factor semantic embeddings, ATS resume tailoring, automated executive outreach generation, and full multi-tenant role-based access control.
 
+
+> **Developers:** setup, tests, Docker and migrations are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ---
 
 ## 🏛️ 1. Architecture Overview

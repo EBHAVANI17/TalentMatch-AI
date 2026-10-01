@@ -2,7 +2,7 @@
 
 Tests run against a throwaway database so they never touch the developer's
 local data. Set TEST_DATABASE_URL to run the suite against Postgres instead,
-e.g. TEST_DATABASE_URL=postgresql+psycopg://talentmatch:talentmatch@localhost:5432/talentmatch_test
+e.g. TEST_DATABASE_URL=postgresql+psycopg://talentmatch:talentmatch@localhost:5433/talentmatch_test
 """
 import os
 import sys
