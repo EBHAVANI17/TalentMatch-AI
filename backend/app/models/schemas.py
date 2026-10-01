@@ -199,21 +199,116 @@ class CandidateProfileOut(BaseModel):
     ats_score: int = 85
     profile_strength: int = 90
     avatar_url: Optional[str] = ""
+    # Phase 2 summary fields
+    availability: str = "open"
+    notice_period_days: Optional[int] = None
+    preferred_locations: List[str] = []
+    source: str = "self_registered"
+    owner_org_id: Optional[str] = None
+    last_active_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    # False when the caller may see the profile but not the person's email/phone
+    contact_visible: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
+Availability = Literal["open", "passive", "not_looking"]
+RemotePreference = Literal["Remote", "Hybrid", "Onsite", "Flexible"]
+
+class WorkExperienceItem(BaseModel):
+    company_name: str = Field(min_length=1, max_length=128)
+    job_title: str = Field(min_length=1, max_length=128)
+    location: str = Field("", max_length=128)
+    start_date: str = Field("", max_length=32, description="YYYY-MM")
+    end_date: str = Field("", max_length=32, description="YYYY-MM, empty when current")
+    is_current: bool = False
+    description: str = Field("", max_length=5000)
+    achievements: List[str] = Field(default_factory=list, max_length=30)
+
+class EducationItem(BaseModel):
+    institution: str = Field(min_length=1, max_length=128)
+    degree: str = Field(min_length=1, max_length=128)
+    field_of_study: str = Field("", max_length=128)
+    graduation_year: Optional[int] = Field(None, ge=1950, le=2100)
+    gpa: str = Field("", max_length=32)
+
+class CertificationItem(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    issuer: str = Field("", max_length=128)
+    issued_on: str = Field("", max_length=16)
+    expires_on: str = Field("", max_length=16)
+    credential_url: str = Field("", max_length=512)
+
+class LanguageItem(BaseModel):
+    language: str = Field(min_length=1, max_length=64)
+    proficiency: Literal["basic", "conversational", "professional", "native"] = "professional"
+
+class ProjectItem(BaseModel):
+    title: str = Field(min_length=1, max_length=128)
+    description: str = Field("", max_length=5000)
+    tech_stack: List[str] = Field(default_factory=list, max_length=30)
+    live_url: str = Field("", max_length=256)
+    repo_url: str = Field("", max_length=256)
+
+class CandidateDetailOut(CandidateProfileOut):
+    phone: str = ""
+    industry: str = ""
+    available_from: Optional[datetime] = None
+    employment_types: List[str] = []
+    is_searchable: bool = True
+    work_experience: List[WorkExperienceItem] = []
+    education_records: List[EducationItem] = []
+    certifications: List[CertificationItem] = []
+    languages: List[LanguageItem] = []
+    projects: List[ProjectItem] = []
+
 class CandidateProfileUpdate(BaseModel):
-    title: Optional[str] = None
-    bio: Optional[str] = None
-    skills: Optional[List[str]] = None
-    experience_years: Optional[float] = None
-    location: Optional[str] = None
+    """Partial update. List fields (experience, education, ...) replace the whole list when sent."""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=128)
+    title: Optional[str] = Field(None, max_length=128)
+    bio: Optional[str] = Field(None, max_length=5000)
+    phone: Optional[str] = Field(None, max_length=32)
+    skills: Optional[List[str]] = Field(None, max_length=100)
+    experience_years: Optional[float] = Field(None, ge=0, le=60)
+    location: Optional[str] = Field(None, max_length=128)
     remote_preference: Optional[str] = None
-    expected_salary: Optional[int] = None
-    education: Optional[str] = None
-    github_url: Optional[str] = None
-    linkedin_url: Optional[str] = None
-    portfolio_url: Optional[str] = None
+    expected_salary: Optional[int] = Field(None, ge=0)
+    education: Optional[str] = Field(None, max_length=128)
+    industry: Optional[str] = Field(None, max_length=64)
+    notice_period_days: Optional[int] = Field(None, ge=0, le=365)
+    availability: Optional[Availability] = None
+    available_from: Optional[datetime] = None
+    preferred_locations: Optional[List[str]] = Field(None, max_length=20)
+    employment_types: Optional[List[str]] = Field(None, max_length=5)
+    is_searchable: Optional[bool] = None
+    github_url: Optional[str] = Field(None, max_length=256)
+    linkedin_url: Optional[str] = Field(None, max_length=256)
+    portfolio_url: Optional[str] = Field(None, max_length=256)
+    work_experience: Optional[List[WorkExperienceItem]] = Field(None, max_length=30)
+    education_records: Optional[List[EducationItem]] = Field(None, max_length=15)
+    certifications: Optional[List[CertificationItem]] = Field(None, max_length=30)
+    languages: Optional[List[LanguageItem]] = Field(None, max_length=15)
+    projects: Optional[List[ProjectItem]] = Field(None, max_length=30)
+
+class SourcedCandidateCreate(CandidateProfileUpdate):
+    """A recruiter adds someone who isn't on the platform yet. Private to the recruiter's organization."""
+    full_name: str = Field(min_length=1, max_length=128)
+    email: EmailStr
+    title: str = Field("", max_length=128)
+
+class CandidateNoteIn(BaseModel):
+    body: str = Field(min_length=1, max_length=5000)
+    application_id: Optional[str] = None
+
+class CandidateNoteOut(BaseModel):
+    id: str
+    candidate_id: str
+    application_id: Optional[str] = None
+    author_user_id: Optional[str] = None
+    author_name: str = ""
+    body: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 # =========================================================================
 # 4. RESUMES & MULTI-DIMENSION QUALITY ANALYSIS
@@ -623,16 +718,24 @@ class ApplicationOut(BaseModel):
     job_id: str
     job_title: str
     company_name: str
+    company_logo: str = "briefcase"
+    organization_id: Optional[str] = None
     candidate_id: str
     candidate_name: str
     candidate_email: str
     candidate_avatar: str
+    candidate_title: str = ""
+    candidate_location: str = ""
+    candidate_experience_years: float = 0.0
     candidate_skills: List[str] = []
     match_score: int
     stage: str
+    source: str = "applied"
     cover_note: str = ""
     score_breakdown: Dict[str, Any] = Field(default_factory=dict)
+    applied_date: str = ""
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

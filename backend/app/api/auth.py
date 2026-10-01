@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.services import account_service
 from app.services.audit_service import log_audit_event
+from app.services.candidate_service import compute_profile_strength
 from app.services.skills_service import set_candidate_skills
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access"])
@@ -71,6 +72,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if password_needs_rehash(user.hashed_password):
         user.hashed_password = hash_password(payload.password)
     user.last_login_at = datetime.utcnow()
+    if user.candidate_profile:
+        user.candidate_profile.last_active_at = user.last_login_at
     db.commit()
 
     log_audit_event(
@@ -113,19 +116,21 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
         id=cand_profile_id,
         user_id=user_id,
         title=payload.title,
-        bio="Frontier software engineer building scalable systems.",
+        bio="",
         skills_json=json.dumps(payload.skills),
         experience_years=payload.experience_years,
         location=payload.location,
         remote_preference=payload.remote_preference,
         expected_salary=payload.expected_salary,
-        education="Bachelor's in Computer Science",
-        ats_score=92,
-        profile_strength=95
+        education="",
+        ats_score=0,  # set when a resume is analysed
+        profile_strength=0,
+        last_active_at=datetime.utcnow(),
     )
     db.add(profile)
     db.flush()
     set_candidate_skills(db, profile, payload.skills)
+    profile.profile_strength = compute_profile_strength(profile)
     db.commit()
     db.refresh(user)
 

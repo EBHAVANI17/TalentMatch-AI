@@ -2,7 +2,8 @@ import re
 import json
 import io
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import pypdf
@@ -10,13 +11,17 @@ import docx
 
 from app.core.database import get_db
 from app.core.tenancy import (
-    TenantContext, get_tenant, scope_candidates, get_visible_candidate, is_own_candidate_profile
+    TenantContext, get_tenant, require_permission, scope_candidates, get_visible_candidate,
+    get_visible_application, is_own_candidate_profile
 )
-from app.models.db_models import CandidateProfile, SkillTaxonomy, User, Job
-from app.models.schemas import CandidateProfileOut, CandidateProfileUpdate
-from app.services.recommender_service import get_candidate_out
+from app.events import emit
+from app.models.db_models import CandidateNote, CandidateProfile, SkillTaxonomy, User, Job
+from app.models.schemas import (
+    CandidateDetailOut, CandidateNoteIn, CandidateNoteOut, CandidateProfileOut, CandidateProfileUpdate,
+    SourcedCandidateCreate,
+)
+from app.services import candidate_service
 from app.services.audit_service import log_audit_event
-from app.services.skills_service import set_candidate_skills
 
 router = APIRouter(prefix="/candidates", tags=["Candidates"])
 
@@ -265,54 +270,192 @@ async def upload_resume(
         db=db
     )
 
+def _can_edit(ctx: TenantContext, cand: CandidateProfile) -> bool:
+    """The candidate themselves, a super admin, or the organization that sourced them."""
+    if ctx.is_super_admin or is_own_candidate_profile(ctx, cand):
+        return True
+    return ctx.is_org_member and cand.owner_org_id == ctx.org_id and ctx.has("candidates:search_pool")
+
+
+def _detail(db: Session, ctx: TenantContext, cand: CandidateProfile) -> CandidateDetailOut:
+    return candidate_service.to_detail(cand, cand.id in candidate_service.contact_visible_ids(db, ctx, [cand.id]))
+
+
+def _audit(db: Session, ctx: TenantContext, action: str, cand: CandidateProfile, details: Optional[dict] = None) -> None:
+    log_audit_event(
+        db=db, action=action, module="Candidates", entity="CandidateProfile", entity_id=cand.id,
+        user_id=ctx.user.id, user_email=ctx.user.email, organization_id=ctx.org_id, details=details or {},
+    )
+
+
 @router.get("", response_model=List[CandidateProfileOut])
-def get_all_candidates(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
-    candidates = scope_candidates(db.query(CandidateProfile), ctx).all()
-    return [get_candidate_out(c) for c in candidates]
+def get_all_candidates(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant),
+    q: Optional[str] = Query(None, max_length=100, description="Name, headline or summary"),
+    skills: Optional[List[str]] = Query(None, description="Repeat for several; all must match"),
+    location: Optional[str] = Query(None, max_length=100),
+    min_experience: Optional[float] = Query(None, ge=0),
+    max_experience: Optional[float] = Query(None, ge=0),
+    availability: Optional[str] = Query(None),
+    remote_preference: Optional[str] = Query(None),
+    max_salary: Optional[int] = Query(None, ge=0),
+    education: Optional[str] = Query(None, max_length=64),
+    source: Optional[str] = Query(None, description="self_registered | recruiter"),
+    sort: str = Query("recent", pattern="^(recent|experience|active|name)$"),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    query = candidate_service.filter_candidates(
+        scope_candidates(db.query(CandidateProfile), ctx),
+        q=q, skills=skills, location=location, min_experience=min_experience, max_experience=max_experience,
+        availability=availability, remote_preference=remote_preference, max_salary=max_salary,
+        education=education, source=source,
+    )
+    order = {
+        "recent": CandidateProfile.created_at.desc(),
+        "experience": CandidateProfile.experience_years.desc(),
+        "active": CandidateProfile.last_active_at.desc(),
+        "name": User.full_name.asc(),
+    }[sort]
+    candidates = query.order_by(order, CandidateProfile.id).offset(offset).limit(limit).all()
+    visible = candidate_service.contact_visible_ids(db, ctx, [c.id for c in candidates])
+    return [candidate_service.to_summary(c, c.id in visible) for c in candidates]
 
-@router.get("/{candidate_id}", response_model=CandidateProfileOut)
+
+@router.post("", response_model=CandidateDetailOut, status_code=201)
+def add_sourced_candidate(
+    payload: SourcedCandidateCreate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("candidates:search_pool")),
+):
+    """Add a person who is not on Talent Match yet. Only your organization can see them."""
+    if not ctx.is_org_member:
+        raise HTTPException(status_code=403, detail="Sourced candidates belong to an organization")
+    cand = candidate_service.create_sourced_candidate(db, ctx, payload)
+    db.commit()
+    db.refresh(cand)
+    _audit(db, ctx, "CANDIDATE_SOURCED", cand)
+    return _detail(db, ctx, cand)
+
+
+@router.get("/me", response_model=CandidateDetailOut)
+def get_my_profile(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    cand = ctx.user.candidate_profile
+    if not cand:
+        raise HTTPException(status_code=404, detail="You do not have a candidate profile")
+    return candidate_service.to_detail(cand, True)
+
+
+@router.patch("/me", response_model=CandidateDetailOut)
+def update_my_profile(payload: CandidateProfileUpdate, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    cand = ctx.user.candidate_profile
+    if not cand:
+        raise HTTPException(status_code=404, detail="You do not have a candidate profile")
+    candidate_service.apply_profile_update(db, cand, payload, ctx.user)
+    db.commit()
+    db.refresh(cand)
+    _audit(db, ctx, "CANDIDATE_UPDATED", cand, {"fields": sorted(payload.model_dump(exclude_unset=True).keys())})
+    return candidate_service.to_detail(cand, True)
+
+
+@router.get("/{candidate_id}", response_model=CandidateDetailOut)
 def get_candidate(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
-    return get_candidate_out(get_visible_candidate(db, ctx, candidate_id))
+    return _detail(db, ctx, get_visible_candidate(db, ctx, candidate_id))
 
-@router.patch("/{candidate_id}", response_model=CandidateProfileOut)
+
+@router.patch("/{candidate_id}", response_model=CandidateDetailOut)
 def update_candidate(
     candidate_id: str,
     payload: CandidateProfileUpdate,
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant)
 ):
-    current_user = ctx.user
     cand = get_visible_candidate(db, ctx, candidate_id)
-    # A profile belongs to the candidate; only they (or a super admin) may edit it.
-    if not (ctx.is_super_admin or is_own_candidate_profile(ctx, cand)):
-        raise HTTPException(status_code=403, detail="You can only edit your own profile")
-
-    if payload.title is not None: cand.title = payload.title
-    if payload.bio is not None: cand.bio = payload.bio
-    if payload.skills is not None: set_candidate_skills(db, cand, payload.skills)
-    if payload.experience_years is not None: cand.experience_years = payload.experience_years
-    if payload.location is not None: cand.location = payload.location
-    if payload.remote_preference is not None: cand.remote_preference = payload.remote_preference
-    if payload.expected_salary is not None: cand.expected_salary = payload.expected_salary
-    if payload.education is not None: cand.education = payload.education
-    if payload.github_url is not None: cand.github_url = payload.github_url
-    if payload.linkedin_url is not None: cand.linkedin_url = payload.linkedin_url
-    if payload.portfolio_url is not None: cand.portfolio_url = payload.portfolio_url
-
+    if not _can_edit(ctx, cand):
+        raise HTTPException(status_code=403, detail="Only the candidate (or the organization that added them) can edit this profile")
+    candidate_service.apply_profile_update(db, cand, payload, ctx.user)
     db.commit()
     db.refresh(cand)
+    _audit(db, ctx, "CANDIDATE_UPDATED", cand, {"fields": sorted(payload.model_dump(exclude_unset=True).keys())})
+    return _detail(db, ctx, cand)
 
-    log_audit_event(
-        db=db,
-        action="CANDIDATE_UPDATED",
-        module="Candidates",
-        entity="CandidateProfile",
-        entity_id=cand.id,
-        user_id=current_user.id,
-        user_email=current_user.email
+
+# ---------------------------------------------------------------------------
+# Recruiter notes (private to the organization)
+# ---------------------------------------------------------------------------
+def _note_out(note: CandidateNote) -> CandidateNoteOut:
+    return CandidateNoteOut(
+        id=note.id, candidate_id=note.candidate_id, application_id=note.application_id,
+        author_user_id=note.author_user_id, author_name=note.author.full_name if note.author else "Former member",
+        body=note.body, created_at=note.created_at, updated_at=note.updated_at,
     )
 
-    return get_candidate_out(cand)
+
+def _notes_scope(db: Session, ctx: TenantContext, candidate_id: str) -> CandidateProfile:
+    if not ctx.is_org_member:
+        raise HTTPException(status_code=403, detail="Notes are available to hiring teams")
+    return get_visible_candidate(db, ctx, candidate_id)
+
+
+@router.get("/{candidate_id}/notes", response_model=List[CandidateNoteOut])
+def list_notes(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    _notes_scope(db, ctx, candidate_id)
+    notes = (
+        db.query(CandidateNote)
+        .filter(CandidateNote.candidate_id == candidate_id, CandidateNote.organization_id == ctx.org_id)
+        .order_by(CandidateNote.created_at.desc())
+        .all()
+    )
+    return [_note_out(n) for n in notes]
+
+
+@router.post("/{candidate_id}/notes", response_model=CandidateNoteOut, status_code=201)
+def add_note(candidate_id: str, payload: CandidateNoteIn, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    _notes_scope(db, ctx, candidate_id)
+    if payload.application_id:
+        app = get_visible_application(db, ctx, payload.application_id)
+        if app.candidate_id != candidate_id:
+            raise HTTPException(status_code=422, detail="That application belongs to a different candidate")
+    note = CandidateNote(
+        id=f"note_{uuid.uuid4().hex[:10]}", organization_id=ctx.org_id, candidate_id=candidate_id,
+        application_id=payload.application_id, author_user_id=ctx.user.id, body=payload.body.strip(),
+    )
+    db.add(note)
+    emit(db, "candidate.note_added", organization_id=ctx.org_id, actor=ctx.user,
+         payload={"candidate_id": candidate_id, "note_id": note.id})
+    db.commit()
+    db.refresh(note)
+    return _note_out(note)
+
+
+def _own_note(db: Session, ctx: TenantContext, candidate_id: str, note_id: str) -> CandidateNote:
+    _notes_scope(db, ctx, candidate_id)
+    note = db.query(CandidateNote).filter(
+        CandidateNote.id == note_id, CandidateNote.candidate_id == candidate_id, CandidateNote.organization_id == ctx.org_id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.author_user_id != ctx.user.id and not ctx.is_org_admin:
+        raise HTTPException(status_code=403, detail="Only the author or an organization admin can change this note")
+    return note
+
+
+@router.patch("/{candidate_id}/notes/{note_id}", response_model=CandidateNoteOut)
+def edit_note(candidate_id: str, note_id: str, payload: CandidateNoteIn, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    note = _own_note(db, ctx, candidate_id, note_id)
+    note.body = payload.body.strip()
+    db.commit()
+    db.refresh(note)
+    return _note_out(note)
+
+
+@router.delete("/{candidate_id}/notes/{note_id}", status_code=204)
+def delete_note(candidate_id: str, note_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
+    note = _own_note(db, ctx, candidate_id, note_id)
+    db.delete(note)
+    db.commit()
+
 
 @router.get("/{candidate_id}/dossier")
 def get_candidate_dossier(candidate_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):

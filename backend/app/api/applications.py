@@ -41,7 +41,10 @@ def get_app_out(app: Application) -> ApplicationOut:
         cover_note=app.cover_note,
         score_breakdown=app.score_breakdown,
         applied_date=app.created_at.strftime("%Y-%m-%d"),
-        created_at=app.created_at
+        organization_id=app.organization_id,
+        source=app.source or "applied",
+        created_at=app.created_at,
+        updated_at=app.updated_at
     )
 
 

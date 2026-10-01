@@ -7,6 +7,7 @@ from app.core.tenancy import (
 )
 from app.models.db_models import CandidateProfile
 from app.models.schemas import JobMatchResult, CandidateMatchResult
+from app.services.candidate_service import contact_visible_ids
 from app.services.recommender_service import (
     recommend_jobs_for_candidate_db, recommend_candidates_for_job_db
 )
@@ -31,4 +32,11 @@ def get_jobs_for_candidate(candidate_id: str, db: Session = Depends(get_db), ctx
 @router.get("/candidates-for-job/{job_id}", response_model=List[CandidateMatchResult])
 def get_candidates_for_job(job_id: str, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
     get_managed_job(db, ctx, job_id)
-    return recommend_candidates_for_job_db(db, job_id, scope_candidates(db.query(CandidateProfile), ctx))
+    results = recommend_candidates_for_job_db(db, job_id, scope_candidates(db.query(CandidateProfile), ctx))
+    # Talent-pool matches show profiles, but contact details only for applicants / sourced candidates.
+    visible = contact_visible_ids(db, ctx, [r.candidate.id for r in results])
+    for r in results:
+        if r.candidate.id not in visible:
+            r.candidate.email = ""
+            r.candidate.contact_visible = False
+    return results
