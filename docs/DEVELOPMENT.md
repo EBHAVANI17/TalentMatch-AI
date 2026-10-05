@@ -4,9 +4,13 @@
 
 ```bash
 cd backend
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
+python -m venv .venv                    # project-local environment (git-ignored), Python 3.11+
+.venv/Scripts/python -m pip install -r requirements-dev.txt     # macOS/Linux: .venv/bin/python
+.venv/Scripts/python -m uvicorn app.main:app --reload --port 8000
 ```
+
+Use the `.venv` interpreter for every backend command below (`python` in the examples means it).
+The Playwright config also starts the backend with `backend/.venv`; override with `E2E_PYTHON`.
 
 Open http://localhost:8000 (app) and http://localhost:8000/docs (API docs).
 On first start the app creates `backend/data/talentmatch_production.db`, applies migrations
@@ -99,7 +103,8 @@ baseline revision (`0001`), so its data is kept.
 
 All settings are in `backend/app/core/config.py` and come from environment variables or `.env`
 (see `.env.example`). With `ENVIRONMENT=staging|production` the app refuses to start if
-`JWT_SECRET_KEY` is weak, `DEMO_MODE` is on, or `CORS_ORIGINS` contains `*`.
+`JWT_SECRET_KEY` is weak, `DATA_ENCRYPTION_KEYS` is unset, `DEMO_MODE` is on, or `CORS_ORIGINS`
+contains `*`.
 
 ## Project layout (current)
 
@@ -128,6 +133,25 @@ infra/          Docker/Postgres setup (AWS Terraform comes later)
 - `tests/test_tenancy.py` is the cross-tenant suite. Add a case for every new tenant-owned endpoint.
 - Refresh tokens rotate and are single-use; replaying one ends all of that user's sessions.
 - Rate limits: `RATE_LIMIT_DEFAULT` per IP on `/api`, `RATE_LIMIT_AUTH` on login/sign-up/reset.
+- Suspending a user (super-admin console) revokes their refresh tokens; their access token stops
+  working immediately because `get_current_user` checks `is_active`.
+
+## Field encryption
+
+Candidate phone, `raw_resume_text` and `resume_versions.extracted_text` are encrypted at rest
+(`backend/app/core/crypto.py`, Fernet). Models declare them as `EncryptedString`/`EncryptedText`;
+application code reads and writes plaintext as usual. Stored values look like `enc::<token>`.
+
+- Keys: `DATA_ENCRYPTION_KEYS`, comma-separated, newest first. Generate one with
+  `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+  Without it, development uses a key derived from `JWT_SECRET_KEY`; production refuses to start.
+- Rotation: put the new key first (keep the old ones), restart, run `python -m app.db.rotate_encryption`,
+  then remove the old keys.
+- Losing the keys means losing that data. Store them in AWS Secrets Manager, separately from backups.
+- A wrong key raises `DecryptionError` (never silently returns ciphertext).
+- Encrypted columns can't be searched with SQL `LIKE`; search and matching use embeddings and the
+  normalized skill tables instead. To encrypt a new column, change its type and add a migration like
+  `0008` that widens it (ciphertext is ~4x longer) and encrypts existing rows.
 
 ## Events and background work
 
@@ -181,3 +205,24 @@ Code lives in `backend/app/matching/` (engine, ontology, embeddings, redaction) 
   caller's tenant scope.
 
 Run the real-model test with `RUN_MODEL_TESTS=1 python -m pytest tests/test_embeddings.py` (downloads ~70 MB once).
+
+## AI features (resume parsing, job drafting)
+
+Code: `backend/app/adapters/llm/` (provider clients and `LLMRouter`), `backend/app/ai/` (orchestrator,
+prompts, rule-based fallbacks), routers `api/ai_features.py` (`/api/v1/ai/...`) and `api/ai_admin.py`
+(`/api/v1/admin/ai/...`).
+
+- **Providers**: set any of `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` in `.env` (free tiers
+  work). They are tried in `LLM_PROVIDER_ORDER`; a provider that rate-limits or fails is skipped for
+  `LLM_COOLDOWN_SECONDS`. Other keys in your environment (e.g. `OPENAI_API_KEY`) are ignored.
+- **No keys**: every feature still works using deterministic fallbacks in `ai/rules.py`; responses say
+  which path was used (`method`: `ai` or `rules`, plus `provider` and a `notice`), and the UI labels AI output so users review it before saving.
+- **Privacy**: names, emails, phone numbers and links are removed (`matching/redaction.py`) before any
+  text is sent to a provider. Resume outputs (personal data) are never stored in the governance log.
+- **Prompts**: versioned in the `prompt_templates` table (defaults in `ai/prompts.py`). Super admins can
+  add a version and activate or roll back via `/api/v1/admin/ai/prompts`.
+- **Governance**: every call is written to `ai_requests` (feature, provider, model, prompt version,
+  latency, tokens, status). Model output must validate against a Pydantic schema; one retry, then the
+  fallback. Limits: `AI_USER_DAILY_LIMIT` per user and the organization's monthly AI credits.
+- **Tests** never call real providers: `tests/conftest.py` and `backend/scripts/e2e_server.py` blank the
+  keys, and provider behaviour is tested with mocked HTTP.
