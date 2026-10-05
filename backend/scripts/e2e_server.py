@@ -18,6 +18,10 @@ os.environ.update({
     "RATE_LIMIT_AUTH": "1000/minute",
     "PASSWORD_HASH_ITERATIONS": "1000",
     "REDIS_URL": "",
+    # Never call real LLM APIs from end-to-end tests
+    "GROQ_API_KEY": "",
+    "GEMINI_API_KEY": "",
+    "OPENROUTER_API_KEY": "",
 })
 
 backend_dir = Path(__file__).resolve().parents[1]

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
-  Alert, Button, Card, CardBody, CardHeader, ErrorState, FullPageSpinner, Input, PageHeader, Select, TagInput, Textarea, useToast,
+  Alert, Button, ButtonLink, Card, CardBody, CardHeader, ErrorState, FullPageSpinner, Input, PageHeader, Select, TagInput, Textarea, useToast,
 } from "@/components/ui";
 import { useMyProfile, useUpdateMyProfile } from "@/features/candidates/api";
 import type { CandidateDetail, CandidateUpdate } from "@/lib/api/types";
@@ -109,7 +109,12 @@ export function MyProfilePage() {
       <PageHeader
         title="My profile"
         description="Recruiters see this profile when it matches their jobs. Contact details are only shared with companies you apply to."
-        actions={<StrengthMeter value={form.profile_strength} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-4">
+            <ButtonLink to="/profile/import" variant="secondary" size="sm">Import from resume</ButtonLink>
+            <StrengthMeter value={form.profile_strength} />
+          </div>
+        }
       />
       {save.isError && <Alert>{save.error.message}</Alert>}
 

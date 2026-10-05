@@ -30,3 +30,7 @@ export type MatchFactor = Schemas["FactorOut"];
 export type JobMatchItem = Schemas["JobMatchItem"];
 export type MatchWeights = Schemas["WeightsOut"];
 export type SearchResults = Schemas["SearchResults"];
+export type ResumeParseResult = Schemas["ResumeParseResult"];
+export type ResumeDraft = Schemas["ResumeDraft"];
+export type JobDraftResult = Schemas["JobDraftResult"];
+export type JobAnalysisResult = Schemas["JobAnalysisResult"];

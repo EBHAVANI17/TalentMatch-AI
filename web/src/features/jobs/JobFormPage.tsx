@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Alert, Button, Card, CardBody, CardHeader, ErrorState, FullPageSpinner, Input, PageHeader, Select, TagInput, Textarea, useToast } from "@/components/ui";
+import { JobDraftAssistant } from "@/features/ai/JobDraftAssistant";
 import type { Job, JobCreate } from "@/lib/api/types";
 import { useCreateJob, useJob, useUpdateJob } from "./api";
 
@@ -23,6 +24,8 @@ interface FormState {
   application_deadline: string;
   seniority: string;
   industry: string;
+  screening_questions: string;
+  interview_criteria: string;
 }
 
 const EMPTY: FormState = {
@@ -30,7 +33,13 @@ const EMPTY: FormState = {
   required_skills: [], preferred_skills: [], min_experience_years: "3", max_experience_years: "",
   required_education: "Bachelor's", location: "", workplace_type: "Remote", employment_type: "Full-time",
   openings: "1", salary_min: "", salary_max: "", application_deadline: "", seniority: "", industry: "",
+  screening_questions: "", interview_criteria: "",
 };
+
+const EDUCATION_OPTIONS = ["Self-taught", "Bachelor's", "Master's", "PhD"];
+const normalizeEducation = (value?: string | null) =>
+  EDUCATION_OPTIONS.find((o) => value && value.toLowerCase().startsWith(o.toLowerCase().slice(0, 4))) ?? "Bachelor's";
+const lines = (items?: string[] | null) => (items ?? []).join("\n");
 
 function fromJob(job: Job): FormState {
   return {
@@ -43,6 +52,7 @@ function fromJob(job: Job): FormState {
     salary_min: job.salary_min ? String(job.salary_min) : "", salary_max: job.salary_max ? String(job.salary_max) : "",
     application_deadline: job.application_deadline ? job.application_deadline.slice(0, 10) : "",
     seniority: job.seniority ?? "", industry: job.industry ?? "",
+    screening_questions: lines(job.screening_questions), interview_criteria: lines(job.interview_criteria),
   };
 }
 
@@ -67,6 +77,8 @@ function toPayload(f: FormState) {
     application_deadline: f.application_deadline ? `${f.application_deadline}T23:59:59` : null,
     seniority: f.seniority,
     industry: f.industry,
+    screening_questions: f.screening_questions.split("\n").map((l) => l.trim()).filter(Boolean),
+    interview_criteria: f.interview_criteria.split("\n").map((l) => l.trim()).filter(Boolean),
   };
 }
 
@@ -133,6 +145,40 @@ export function JobFormPage() {
       <PageHeader title={editing ? "Edit job" : "Create job"} description={editing ? existing.data?.title : "Describe the role. You can save it as a draft and publish later."} />
       {error && <Alert>{error}</Alert>}
 
+      {!editing && (
+        <JobDraftAssistant
+          onDraft={(d) => setForm((f) => ({
+            ...f,
+            title: d.title || f.title, department: d.department || f.department, description: d.description || f.description,
+            responsibilities: lines(d.responsibilities) || f.responsibilities,
+            required_skills: d.required_skills?.length ? d.required_skills : f.required_skills,
+            preferred_skills: d.preferred_skills?.length ? d.preferred_skills : f.preferred_skills,
+            min_experience_years: String(d.min_experience_years ?? f.min_experience_years),
+            max_experience_years: d.max_experience_years != null ? String(d.max_experience_years) : f.max_experience_years,
+            required_education: normalizeEducation(d.required_education), location: d.location || f.location,
+            workplace_type: d.workplace_type || f.workplace_type, employment_type: d.employment_type || f.employment_type,
+            salary_min: d.salary_min ? String(d.salary_min) : f.salary_min, salary_max: d.salary_max ? String(d.salary_max) : f.salary_max,
+            seniority: d.seniority || f.seniority,
+            screening_questions: lines(d.screening_questions) || f.screening_questions,
+            interview_criteria: lines(d.interview_criteria) || f.interview_criteria,
+          }))}
+          onAnalysis={(a, text) => setForm((f) => ({
+            ...f,
+            title: f.title || a.title || "", description: f.description || text,
+            responsibilities: f.responsibilities || lines(a.responsibilities),
+            required_skills: a.required_skills?.length ? a.required_skills : f.required_skills,
+            preferred_skills: a.preferred_skills?.length ? a.preferred_skills : f.preferred_skills,
+            min_experience_years: a.min_experience_years != null ? String(a.min_experience_years) : f.min_experience_years,
+            max_experience_years: a.max_experience_years != null ? String(a.max_experience_years) : f.max_experience_years,
+            required_education: a.required_education ? normalizeEducation(a.required_education) : f.required_education,
+            location: a.location || f.location, workplace_type: a.workplace_type || f.workplace_type,
+            employment_type: a.employment_type || f.employment_type,
+            salary_min: a.salary_min ? String(a.salary_min) : f.salary_min, salary_max: a.salary_max ? String(a.salary_max) : f.salary_max,
+            seniority: a.seniority || f.seniority, industry: a.industry || f.industry,
+          }))}
+        />
+      )}
+
       <Card>
         <CardHeader title="Role" />
         <CardBody className="grid gap-4 md:grid-cols-2">
@@ -158,7 +204,7 @@ export function JobFormPage() {
           <TagInput label="Preferred skills" value={form.preferred_skills} onChange={set("preferred_skills")} placeholder="e.g. Terraform" />
           <Input label="Minimum experience (years)" type="number" min={0} step={0.5} {...field("min_experience_years")} />
           <Input label="Maximum experience (years)" type="number" min={0} step={0.5} hint="Optional" {...field("max_experience_years")} />
-          <Select label="Education" {...field("required_education")} options={["Self-taught", "Bachelor's", "Master's", "PhD"].map((v) => ({ value: v, label: v }))} />
+          <Select label="Education" {...field("required_education")} options={EDUCATION_OPTIONS.map((v) => ({ value: v, label: v }))} />
         </CardBody>
       </Card>
 
@@ -170,6 +216,14 @@ export function JobFormPage() {
           <Input label="Salary from" type="number" min={0} {...field("salary_min")} />
           <Input label="Salary to" type="number" min={0} {...field("salary_max")} />
           <Input label="Application deadline" type="date" hint="Optional" {...field("application_deadline")} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Screening and interviews" description="Used by your team to screen applicants consistently." />
+        <CardBody className="grid gap-4 md:grid-cols-2">
+          <Textarea label="Screening questions" hint="One per line" rows={4} {...field("screening_questions")} />
+          <Textarea label="Interview criteria" hint="One per line" rows={4} {...field("interview_criteria")} />
         </CardBody>
       </Card>
 

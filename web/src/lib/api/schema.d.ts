@@ -753,7 +753,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate Job Spec */
+        /**
+         * Generate Job Spec
+         * @description Legacy shape over the real generator (/ai/jobs/generate).
+         */
         post: operations["generate_job_spec_api_v1_ai_generate_job_spec_post"];
         delete?: never;
         options?: never;
@@ -1281,6 +1284,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/resume/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse Resume
+         * @description Store a resume file and return a draft profile extracted from it, for review.
+         *
+         *     - Candidates: the file is attached to their own profile; the draft is NOT applied until they save it.
+         *     - Recruiters: with candidate_id (a candidate they added) it is attached to that profile; without it,
+         *       the file is kept for the organization and can be linked when creating the candidate
+         *       (POST /candidates with resume_document_id).
+         */
+        post: operations["parse_resume_api_v1_ai_resume_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/jobs/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Job
+         * @description Draft a full job description from a short brief, e.g. "Senior Backend Developer, 5+ years, Node.js, AWS".
+         */
+        post: operations["generate_job_api_v1_ai_jobs_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/jobs/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Job
+         * @description Turn a pasted job description into structured requirements.
+         */
+        post: operations["analyze_job_api_v1_ai_jobs_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage
+         * @description AI usage for your organization this month.
+         */
+        get: operations["usage_api_v1_ai_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai/prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Prompts */
+        get: operations["list_prompts_api_v1_admin_ai_prompts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai/prompts/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Prompt Version
+         * @description Create a new draft version. It takes effect only when activated.
+         */
+        post: operations["create_prompt_version_api_v1_admin_ai_prompts__key__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai/prompts/{key}/versions/{version}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Prompt Version
+         * @description Make a version live (also used to roll back to an earlier version).
+         */
+        post: operations["activate_prompt_version_api_v1_admin_ai_prompts__key__versions__version__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Requests */
+        get: operations["list_requests_api_v1_admin_ai_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/recommend-jobs/{userId}": {
         parameters: {
             query?: never;
@@ -1319,6 +1481,44 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIRequestOut */
+        AIRequestOut: {
+            /** Id */
+            id: string;
+            /** Organization Id */
+            organization_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Feature */
+            feature: string;
+            /** Status */
+            status: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Prompt Key */
+            prompt_key: string;
+            /** Prompt Version */
+            prompt_version?: number | null;
+            /** Input Ref */
+            input_ref: string;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Credits */
+            credits: number;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Error */
+            error: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AIUsageRecordOut */
         AIUsageRecordOut: {
             /** Id */
@@ -1683,6 +1883,19 @@ export interface components {
              */
             sourcing_summary: string;
         };
+        /** Body_parse_resume_api_v1_ai_resume_parse_post */
+        Body_parse_resume_api_v1_ai_resume_parse_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /**
+             * Candidate Id
+             * @description A candidate your organization added; omit to parse your own resume, or to prepare a new candidate
+             */
+            candidate_id?: string | null;
+        };
         /** Body_upload_and_process_resume_api_v1_resumes_upload_post */
         Body_upload_and_process_resume_api_v1_resumes_upload_post: {
             /**
@@ -1702,6 +1915,11 @@ export interface components {
             file: string;
             /** Target Job Id */
             target_job_id?: string | null;
+        };
+        /** BriefIn */
+        BriefIn: {
+            /** Brief */
+            brief: string;
         };
         /** CandidateCounts */
         CandidateCounts: {
@@ -2127,6 +2345,24 @@ export interface components {
             /** Projects */
             projects?: components["schemas"]["ProjectItem"][] | null;
         };
+        /** CertificationDraft */
+        CertificationDraft: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Issuer
+             * @default
+             */
+            issuer: string;
+            /**
+             * Issued On
+             * @default
+             */
+            issued_on: string;
+        };
         /** CertificationItem */
         CertificationItem: {
             /** Name */
@@ -2151,6 +2387,47 @@ export interface components {
              * @default
              */
             credential_url: string;
+        };
+        /**
+         * ContactInfo
+         * @description Extracted locally with patterns; never sent to or produced by an AI model.
+         */
+        ContactInfo: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Email
+             * @default
+             */
+            email: string;
+            /**
+             * Phone
+             * @default
+             */
+            phone: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Linkedin Url
+             * @default
+             */
+            linkedin_url: string;
+            /**
+             * Github Url
+             * @default
+             */
+            github_url: string;
+            /**
+             * Portfolio Url
+             * @default
+             */
+            portfolio_url: string;
         };
         /** DayCount */
         DayCount: {
@@ -2188,6 +2465,26 @@ export interface components {
              */
             expires_at: string;
         };
+        /** EducationDraft */
+        EducationDraft: {
+            /**
+             * Institution
+             * @default
+             */
+            institution: string;
+            /**
+             * Degree
+             * @default
+             */
+            degree: string;
+            /**
+             * Field Of Study
+             * @default
+             */
+            field_of_study: string;
+            /** Graduation Year */
+            graduation_year?: number | null;
+        };
         /** EducationItem */
         EducationItem: {
             /** Institution */
@@ -2206,6 +2503,49 @@ export interface components {
              * @default
              */
             gpa: string;
+        };
+        /** ExperienceDraft */
+        ExperienceDraft: {
+            /**
+             * Job Title
+             * @default
+             */
+            job_title: string;
+            /**
+             * Company Name
+             * @default
+             */
+            company_name: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Start Date
+             * @default
+             */
+            start_date: string;
+            /**
+             * End Date
+             * @default
+             */
+            end_date: string;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: string[];
         };
         /** FactorOut */
         FactorOut: {
@@ -2339,6 +2679,86 @@ export interface components {
             /** Created At */
             created_at?: string | null;
         };
+        /** JobAnalysis */
+        JobAnalysis: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Seniority
+             * @default
+             */
+            seniority: string;
+            /**
+             * Industry
+             * @default
+             */
+            industry: string;
+            /**
+             * Employment Type
+             * @default
+             */
+            employment_type: string;
+            /**
+             * Workplace Type
+             * @default
+             */
+            workplace_type: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Required Skills
+             * @default []
+             */
+            required_skills: string[];
+            /**
+             * Preferred Skills
+             * @default []
+             */
+            preferred_skills: string[];
+            /** Min Experience Years */
+            min_experience_years?: number | null;
+            /** Max Experience Years */
+            max_experience_years?: number | null;
+            /**
+             * Required Education
+             * @default
+             */
+            required_education: string;
+            /**
+             * Certifications
+             * @default []
+             */
+            certifications: string[];
+            /** Salary Min */
+            salary_min?: number | null;
+            /** Salary Max */
+            salary_max?: number | null;
+            /**
+             * Responsibilities
+             * @default []
+             */
+            responsibilities: string[];
+        };
+        /** JobAnalysisResult */
+        JobAnalysisResult: {
+            /** Method */
+            method: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Notice */
+            notice: string;
+            /** Request Id */
+            request_id: string;
+            analysis: components["schemas"]["JobAnalysis"];
+        };
         /** JobCounts */
         JobCounts: {
             /** Total */
@@ -2448,12 +2868,109 @@ export interface components {
              *     ]
              */
             benefits: string[];
+            /** Screening Questions */
+            screening_questions?: string[];
+            /** Interview Criteria */
+            interview_criteria?: string[];
             /**
              * Status
              * @default Active
              * @enum {string}
              */
             status: "Draft" | "Active";
+        };
+        /** JobDraft */
+        JobDraft: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Department
+             * @default
+             */
+            department: string;
+            /**
+             * Seniority
+             * @default
+             */
+            seniority: string;
+            /**
+             * Employment Type
+             * @default Full-time
+             */
+            employment_type: string;
+            /**
+             * Workplace Type
+             * @default Remote
+             */
+            workplace_type: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Responsibilities
+             * @default []
+             */
+            responsibilities: string[];
+            /**
+             * Required Skills
+             * @default []
+             */
+            required_skills: string[];
+            /**
+             * Preferred Skills
+             * @default []
+             */
+            preferred_skills: string[];
+            /**
+             * Min Experience Years
+             * @default 0
+             */
+            min_experience_years: number;
+            /** Max Experience Years */
+            max_experience_years?: number | null;
+            /**
+             * Required Education
+             * @default Bachelor's
+             */
+            required_education: string;
+            /** Salary Min */
+            salary_min?: number | null;
+            /** Salary Max */
+            salary_max?: number | null;
+            /**
+             * Interview Criteria
+             * @default []
+             */
+            interview_criteria: string[];
+            /**
+             * Screening Questions
+             * @default []
+             */
+            screening_questions: string[];
+        };
+        /** JobDraftResult */
+        JobDraftResult: {
+            /** Method */
+            method: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Notice */
+            notice: string;
+            /** Request Id */
+            request_id: string;
+            draft: components["schemas"]["JobDraft"];
         };
         /** JobMatchItem */
         JobMatchItem: {
@@ -2619,6 +3136,16 @@ export interface components {
             /** Closed At */
             closed_at?: string | null;
             /**
+             * Screening Questions
+             * @default []
+             */
+            screening_questions: string[];
+            /**
+             * Interview Criteria
+             * @default []
+             */
+            interview_criteria: string[];
+            /**
              * Posted Date
              * @default
              */
@@ -2769,6 +3296,11 @@ export interface components {
              */
             estimated_candidate_pool_expansion_pct: number;
         };
+        /** JobTextIn */
+        JobTextIn: {
+            /** Text */
+            text: string;
+        };
         /**
          * JobUpdate
          * @description Partial update: only fields that are sent are changed. Status changes use the lifecycle actions.
@@ -2816,6 +3348,23 @@ export interface components {
             urgency?: string | null;
             /** Benefits */
             benefits?: string[] | null;
+            /** Screening Questions */
+            screening_questions?: string[] | null;
+            /** Interview Criteria */
+            interview_criteria?: string[] | null;
+        };
+        /** LanguageDraft */
+        LanguageDraft: {
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /**
+             * Proficiency
+             * @default professional
+             */
+            proficiency: string;
         };
         /** LanguageItem */
         LanguageItem: {
@@ -3290,6 +3839,24 @@ export interface components {
             /** Allow Custom Roadmaps */
             allow_custom_roadmaps: boolean;
         };
+        /** ProjectDraft */
+        ProjectDraft: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Tech Stack
+             * @default []
+             */
+            tech_stack: string[];
+        };
         /** ProjectItem */
         ProjectItem: {
             /** Title */
@@ -3311,6 +3878,35 @@ export interface components {
              * @default
              */
             repo_url: string;
+        };
+        /** PromptIn */
+        PromptIn: {
+            /** System */
+            system: string;
+            /** User Template */
+            user_template: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+        };
+        /** PromptOut */
+        PromptOut: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: number;
+            /** Status */
+            status: string;
+            /** System */
+            system: string;
+            /** User Template */
+            user_template: string;
+            /** Notes */
+            notes: string;
+            /** Created At */
+            created_at?: string | null;
         };
         /** PublicConfig */
         PublicConfig: {
@@ -3490,6 +4086,56 @@ export interface components {
             /** Created At */
             created_at?: string | null;
         };
+        /** ResumeDraft */
+        ResumeDraft: {
+            /**
+             * Headline
+             * @default
+             */
+            headline: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Total Experience Years */
+            total_experience_years?: number | null;
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+            /**
+             * Work Experience
+             * @default []
+             */
+            work_experience: components["schemas"]["ExperienceDraft"][];
+            /**
+             * Education
+             * @default []
+             */
+            education: components["schemas"]["EducationDraft"][];
+            /**
+             * Certifications
+             * @default []
+             */
+            certifications: components["schemas"]["CertificationDraft"][];
+            /**
+             * Projects
+             * @default []
+             */
+            projects: components["schemas"]["ProjectDraft"][];
+            /**
+             * Languages
+             * @default []
+             */
+            languages: components["schemas"]["LanguageDraft"][];
+            /**
+             * Industries
+             * @default []
+             */
+            industries: string[];
+        };
         /** ResumeOut */
         ResumeOut: {
             /** Id */
@@ -3592,6 +4238,27 @@ export interface components {
             missing_skills_for_target?: string[] | null;
             /** Tailoring Recommendations */
             tailoring_recommendations?: string[] | null;
+        };
+        /** ResumeParseResult */
+        ResumeParseResult: {
+            /** Method */
+            method: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Notice */
+            notice: string;
+            /** Request Id */
+            request_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Resume Id */
+            resume_id?: string | null;
+            /** Candidate Id */
+            candidate_id?: string | null;
+            contact: components["schemas"]["ContactInfo"];
+            draft: components["schemas"]["ResumeDraft"];
         };
         /** ResumeTailorRequest */
         ResumeTailorRequest: {
@@ -3859,6 +4526,8 @@ export interface components {
              * Format: email
              */
             email: string;
+            /** Resume Document Id */
+            resume_document_id?: string | null;
         };
         /** StageOut */
         StageOut: {
@@ -3886,6 +4555,35 @@ export interface components {
             /** Refresh Token */
             refresh_token?: string | null;
             user: components["schemas"]["UserOut"];
+        };
+        /** UsageRow */
+        UsageRow: {
+            /** Feature */
+            feature: string;
+            /** Status */
+            status: string;
+            /** Requests */
+            requests: number;
+            /** Credits */
+            credits: number;
+            /** Tokens */
+            tokens: number;
+        };
+        /** UsageSummary */
+        UsageSummary: {
+            /** Credits Used */
+            credits_used: number;
+            /** Credits Limit */
+            credits_limit: number;
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /** Rows */
+            rows: components["schemas"]["UsageRow"][];
+            /** Providers Configured */
+            providers_configured: boolean;
         };
         /** UserOut */
         UserOut: {
@@ -6630,6 +7328,257 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_resume_api_v1_ai_resume_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_resume_api_v1_ai_resume_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeParseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_job_api_v1_ai_jobs_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BriefIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDraftResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_job_api_v1_ai_jobs_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobTextIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAnalysisResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_api_v1_ai_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+        };
+    };
+    list_prompts_api_v1_admin_ai_prompts_get: {
+        parameters: {
+            query?: {
+                key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_prompt_version_api_v1_admin_ai_prompts__key__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_prompt_version_api_v1_admin_ai_prompts__key__versions__version__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_v1_admin_ai_requests_get: {
+        parameters: {
+            query?: {
+                feature?: string | null;
+                status?: string | null;
+                organization_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIRequestOut"][];
                 };
             };
             /** @description Validation Error */

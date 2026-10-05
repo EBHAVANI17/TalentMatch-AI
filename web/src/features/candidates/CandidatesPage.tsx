@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MapPin, Plus, Search } from "lucide-react";
 import {
-  Alert, Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, PageHeader, Select, Skeleton, TagInput, cn, useToast,
+  Alert, Avatar, Badge, Button, ButtonLink, Card, EmptyState, ErrorState, Input, Modal, PageHeader, Select, Skeleton, TagInput, cn, useToast,
 } from "@/components/ui";
 import { experienceLabel } from "@/lib/format";
 import { AVAILABILITY_LABEL, useAddCandidate, useCandidates, type CandidateFilters } from "./api";
@@ -83,7 +83,12 @@ export function CandidatesPage() {
       <PageHeader
         title="Candidates"
         description="Your talent pool: people who applied to your jobs, searchable talent and candidates you added."
-        actions={<Button icon={<Plus className="size-4" aria-hidden />} onClick={() => setAdding(true)}>Add candidate</Button>}
+        actions={
+          <>
+            <ButtonLink to="/candidates/import" variant="secondary">Add from resume</ButtonLink>
+            <Button icon={<Plus className="size-4" aria-hidden />} onClick={() => setAdding(true)}>Add candidate</Button>
+          </>
+        }
       />
 
       <Card className="flex flex-col gap-3 p-4">

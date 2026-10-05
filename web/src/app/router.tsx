@@ -13,6 +13,7 @@ import { MyProfilePage } from "@/features/profile/MyProfilePage";
 import { SearchPage } from "@/features/search/SearchPage";
 import { JobsForYouPage } from "@/features/talent-match/JobsForYouPage";
 import { TalentMatchPage } from "@/features/talent-match/TalentMatchPage";
+import { ResumeImportPage } from "@/features/ai/ResumeImportPage";
 import { TeamPage } from "@/features/team/TeamPage";
 import { RedirectIfAuthenticated, RequireAuth, RequireRole } from "@/lib/auth/guards";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -80,6 +81,8 @@ export const routes: RouteObject[] = [
           { path: "jobs/:jobId", element: hiring(<JobDetailPage />) },
           { path: "jobs/:jobId/edit", element: hiring(<JobFormPage />) },
           { path: "candidates", element: hiring(<CandidatesPage />) },
+          { path: "candidates/import", element: hiring(<ResumeImportPage mode="recruiter" />) },
+          { path: "profile/import", element: <RequireRole allow={isCandidate}><ResumeImportPage mode="candidate" /></RequireRole> },
           { path: "candidates/:candidateId", element: hiring(<CandidateDetailPage />) },
           { path: "profile", element: <RequireRole allow={isCandidate}><MyProfilePage /></RequireRole> },
           { path: "talent-match", element: hiring(<TalentMatchPage />) },
