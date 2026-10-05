@@ -58,10 +58,12 @@ def configured_keys() -> List[bytes]:
 @lru_cache
 def get_cipher() -> MultiFernet:
     keys = configured_keys() or [_derived_dev_key()]
-    fernets = [Fernet(k) for k in keys]
-    # Data written before DATA_ENCRYPTION_KEYS existed stays readable until it's rotated.
-    fernets.append(Fernet(_legacy_derived_key()))
-    return MultiFernet(fernets)
+    # Decrypt-only fallbacks: data written with the development key or by the first version of
+    # this module stays readable after DATA_ENCRYPTION_KEYS is set, until it's rotated.
+    for fallback in (_derived_dev_key(), _legacy_derived_key()):
+        if fallback not in keys:
+            keys.append(fallback)
+    return MultiFernet([Fernet(k) for k in keys])
 
 
 def reset_cipher() -> None:

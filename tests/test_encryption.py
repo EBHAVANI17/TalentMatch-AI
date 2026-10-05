@@ -79,6 +79,13 @@ def test_key_rotation(keys):
         crypto.decrypt_value(token)
 
 
+def test_dev_key_data_stays_readable_after_configuring_keys(keys):
+    token = crypto.encrypt_value("written in development")  # default dev key
+    keys(Fernet.generate_key())
+    assert crypto.decrypt_value(token) == "written in development"
+    assert crypto.decrypt_value(crypto.rotate_value(token)) == "written in development"
+
+
 def test_status_reports_development_key_truthfully():
     status = crypto.get_encryption_status()
     assert status["status"] == "DEVELOPMENT KEY" and status["key_derived"] is True
