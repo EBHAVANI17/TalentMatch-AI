@@ -2,7 +2,9 @@
 from logging.config import fileConfig
 
 from alembic import context
+import sqlalchemy as sa
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.types import TypeDecorator
 
 from app.core.config import settings
 from app.core.database import Base
@@ -21,6 +23,18 @@ MANUAL_INDEXES = {"ix_embeddings_vector_hnsw"}
 
 def include_object(obj, name, type_, reflected, compare_to):
     return not (type_ == "index" and name in MANUAL_INDEXES)
+
+
+def compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type):
+    """Compare encrypted columns (TypeDecorators) by their storage type, e.g. EncryptedString(256) vs VARCHAR(256)."""
+    if isinstance(metadata_type, TypeDecorator):
+        impl = metadata_type.impl_instance
+        if isinstance(impl, sa.String) and isinstance(inspected_type, sa.String):
+            # Text vs Text, or String(n) vs VARCHAR(n): differ only if the length differs
+            same_kind = isinstance(impl, sa.Text) == isinstance(inspected_type, sa.Text)
+            return not (same_kind and impl.length == inspected_type.length)
+        return None
+    return None  # default comparison
 
 
 def _is_sqlite() -> bool:
@@ -58,7 +72,7 @@ def _run(connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         render_as_batch=connection.dialect.name == "sqlite",
-        compare_type=True,
+        compare_type=compare_type,
         include_object=include_object,
     )
     with context.begin_transaction():

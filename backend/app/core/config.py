@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     password_reset_ttl_minutes: int = 60
     invitation_ttl_days: int = 7
 
+    # Field-level encryption for sensitive columns (phone, resume text).
+    # Comma-separated Fernet keys, newest first; see app/core/crypto.py for rotation.
+    # Empty = a development key derived from JWT_SECRET_KEY (not allowed in production).
+    data_encryption_keys: str = ""
+
     # Public URL of the web app, used in links inside emails
     app_base_url: str = "http://localhost:8000"
 
@@ -137,6 +142,8 @@ class Settings(BaseSettings):
         problems = []
         if self.jwt_secret_key == DEV_JWT_SECRET or len(self.jwt_secret_key) < 32:
             problems.append("JWT_SECRET_KEY must be set to a random value of at least 32 characters")
+        if not self.data_encryption_keys.strip():
+            problems.append("DATA_ENCRYPTION_KEYS must be set (generate with Fernet.generate_key())")
         if self.demo_mode:
             problems.append("DEMO_MODE must be false")
         if "*" in self.cors_origin_list:

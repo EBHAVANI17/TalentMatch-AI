@@ -1,15 +1,29 @@
 import json
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Any, List, Optional
 from sqlalchemy import (
     Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, Index, Enum, LargeBinary
 )
 from pgvector.sqlalchemy import Vector
 
 from app.core.config import settings
+from app.core.crypto import EncryptedString, EncryptedText
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def _parse_json(val: Any, default: Any = None) -> Any:
+    if default is None:
+        default = []
+    if not val:
+        return default
+    try:
+        return json.loads(str(val))
+    except Exception:
+        return default
 
 # =========================================================================
 # 1. ORGANIZATIONS (MULTI-TENANCY ISOLATION BOUNDARY)
@@ -35,8 +49,8 @@ class Organization(Base):
     # Organization-specific weights for the matching engine (JSON object); empty = platform defaults
     matching_weights_json = Column(Text, default="")
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
@@ -66,8 +80,8 @@ class User(Base):
     email_verified = Column(Boolean, default=True)
     last_login_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
@@ -95,13 +109,13 @@ class CandidateProfile(Base):
     github_url = Column(String(256), default="")
     linkedin_url = Column(String(256), default="")
     portfolio_url = Column(String(256), default="")
-    raw_resume_text = Column(Text, default="")
+    raw_resume_text = Column(EncryptedText, default="")
     ats_score = Column(Integer, default=90)
     profile_strength = Column(Integer, default=95)
     is_searchable = Column(Boolean, default=True, index=True)
 
-    # Contact, availability and preferences
-    phone = Column(String(32), default="")
+    # Contact, availability and preferences (encrypted at rest)
+    phone = Column(EncryptedString(256), default="")
     industry = Column(String(64), default="")
     notice_period_days = Column(Integer, nullable=True)
     availability = Column(String(32), default="open")  # open | passive | not_looking
@@ -114,8 +128,8 @@ class CandidateProfile(Base):
     source = Column(String(32), default="self_registered")  # self_registered | recruiter | import
     last_active_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     user = relationship("User", back_populates="candidate_profile")
@@ -130,28 +144,19 @@ class CandidateProfile(Base):
 
     @property
     def preferred_locations(self):
-        try:
-            return json.loads(self.preferred_locations_json) if self.preferred_locations_json else []
-        except Exception:
-            return []
+        return _parse_json(self.preferred_locations_json, [])
 
     @property
     def employment_types(self):
-        try:
-            return json.loads(self.employment_types_json) if self.employment_types_json else []
-        except Exception:
-            return []
+        return _parse_json(self.employment_types_json, [])
 
     @property
     def skills(self):
-        try:
-            return json.loads(self.skills_json) if self.skills_json else []
-        except Exception:
-            return []
+        return _parse_json(self.skills_json, [])
 
     @skills.setter
     def skills(self, value):
-        self.skills_json = json.dumps(value)
+        setattr(self, "skills_json", json.dumps(value))
 
 class WorkExperience(Base):
     __tablename__ = "work_experiences"
@@ -166,16 +171,13 @@ class WorkExperience(Base):
     is_current = Column(Boolean, default=False)
     description = Column(Text, default="")
     achievements_json = Column(Text, default="[]") # List of quantified achievement bullet points
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     candidate = relationship("CandidateProfile", back_populates="work_experiences")
 
     @property
     def achievements(self):
-        try:
-            return json.loads(self.achievements_json) if self.achievements_json else []
-        except Exception:
-            return []
+        return _parse_json(self.achievements_json, [])
 
 class EducationRecord(Base):
     __tablename__ = "education_records"
@@ -187,7 +189,7 @@ class EducationRecord(Base):
     field_of_study = Column(String(128), default="Computer Science")
     graduation_year = Column(Integer, default=2022)
     gpa = Column(String(32), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     candidate = relationship("CandidateProfile", back_populates="education_records")
 
@@ -202,16 +204,13 @@ class CandidateProject(Base):
     live_url = Column(String(256), default="")
     repo_url = Column(String(256), default="")
     metrics_json = Column(Text, default="{}") # e.g. {"qps": 50000, "latency_reduction": "40%"}
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     candidate = relationship("CandidateProfile", back_populates="projects")
 
     @property
     def tech_stack(self):
-        try:
-            return json.loads(self.tech_stack_json) if self.tech_stack_json else []
-        except Exception:
-            return []
+        return _parse_json(self.tech_stack_json, [])
 
 # =========================================================================
 # 4. RESUMES, VERSIONS & MULTI-DIMENSIONAL ANALYSIS
@@ -230,8 +229,8 @@ class Resume(Base):
     current_version = Column(Integer, default=1)
     is_primary = Column(Boolean, default=True)
     processing_status = Column(String(32), default="Parsed", index=True) # Uploaded, Processing, Parsed, Failed
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     candidate = relationship("CandidateProfile", back_populates="resumes")
     versions = relationship("ResumeVersion", back_populates="resume", cascade="all, delete-orphan")
@@ -244,9 +243,9 @@ class ResumeVersion(Base):
     resume_id = Column(String(64), ForeignKey("resumes.id"), nullable=False, index=True)
     version_number = Column(Integer, default=1)
     storage_path = Column(String(512), default="")
-    extracted_text = Column(Text, default="")
+    extracted_text = Column(EncryptedText, default="")
     parsed_payload_json = Column(Text, default="{}") # Structured extracted JSON
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     resume = relationship("Resume", back_populates="versions")
 
@@ -270,31 +269,22 @@ class ResumeAnalysis(Base):
     missing_items_json = Column(Text, default="[]")  # List of missing keywords / metrics
     suggestions_json = Column(Text, default="[]")    # Actionable suggestions for improvements
     raw_analysis_notes = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     resume = relationship("Resume", back_populates="analyses")
     target_job = relationship("Job")
 
     @property
     def findings(self):
-        try:
-            return json.loads(self.findings_json) if self.findings_json else []
-        except Exception:
-            return []
+        return _parse_json(self.findings_json, [])
 
     @property
     def missing_items(self):
-        try:
-            return json.loads(self.missing_items_json) if self.missing_items_json else []
-        except Exception:
-            return []
+        return _parse_json(self.missing_items_json, [])
 
     @property
     def suggestions(self):
-        try:
-            return json.loads(self.suggestions_json) if self.suggestions_json else []
-        except Exception:
-            return []
+        return _parse_json(self.suggestions_json, [])
 
 # =========================================================================
 # 5. JOBS & REQUISITIONS (TENANT BOUND)
@@ -332,8 +322,8 @@ class Job(Base):
     interview_criteria_json = Column(Text, default="[]")
     published_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     organization = relationship("Organization", back_populates="jobs")
@@ -342,45 +332,27 @@ class Job(Base):
 
     @property
     def required_skills(self):
-        try:
-            return json.loads(self.required_skills_json) if self.required_skills_json else []
-        except Exception:
-            return []
+        return _parse_json(self.required_skills_json, [])
 
     @property
     def preferred_skills(self):
-        try:
-            return json.loads(self.preferred_skills_json) if self.preferred_skills_json else []
-        except Exception:
-            return []
+        return _parse_json(self.preferred_skills_json, [])
 
     @property
     def responsibilities(self):
-        try:
-            return json.loads(self.responsibilities_json) if self.responsibilities_json else []
-        except Exception:
-            return []
+        return _parse_json(self.responsibilities_json, [])
 
     @property
     def screening_questions(self):
-        try:
-            return json.loads(self.screening_questions_json) if self.screening_questions_json else []
-        except Exception:
-            return []
+        return _parse_json(self.screening_questions_json, [])
 
     @property
     def interview_criteria(self):
-        try:
-            return json.loads(self.interview_criteria_json) if self.interview_criteria_json else []
-        except Exception:
-            return []
+        return _parse_json(self.interview_criteria_json, [])
 
     @property
     def benefits(self):
-        try:
-            return json.loads(self.benefits_json) if self.benefits_json else []
-        except Exception:
-            return []
+        return _parse_json(self.benefits_json, [])
 
 # =========================================================================
 # 6. APPLICATIONS & STAGE AUDIT HISTORY
@@ -400,8 +372,8 @@ class Application(Base):
     stage = Column(String(32), default="Applied", index=True)
     cover_note = Column(Text, default="")
     score_breakdown_json = Column(Text, default="{}")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     job = relationship("Job", back_populates="applications")
@@ -411,10 +383,7 @@ class Application(Base):
 
     @property
     def score_breakdown(self):
-        try:
-            return json.loads(self.score_breakdown_json) if self.score_breakdown_json else {}
-        except Exception:
-            return {}
+        return _parse_json(self.score_breakdown_json, {})
 
 class ApplicationStageHistory(Base):
     __tablename__ = "application_stage_history"
@@ -425,7 +394,7 @@ class ApplicationStageHistory(Base):
     to_stage = Column(String(32), nullable=False)
     changed_by_user_id = Column(String(64), ForeignKey("users.id"), nullable=True)
     reason = Column(String(256), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     application = relationship("Application", back_populates="stage_history")
 
@@ -442,7 +411,7 @@ class Interview(Base):
     scheduled_at = Column(DateTime, nullable=True)
     status = Column(String(32), default="Scheduled") # Scheduled, Completed, Cancelled
     meeting_link = Column(String(256), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     application = relationship("Application", back_populates="interviews")
     feedback = relationship("InterviewFeedback", back_populates="interview", uselist=False, cascade="all, delete-orphan")
@@ -460,7 +429,7 @@ class InterviewFeedback(Base):
     growth_areas = Column(Text, default="")
     decision = Column(String(32), default="Strong Hire") # Strong Hire, Hire, Leaning Hire, Reject
     notes = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     interview = relationship("Interview", back_populates="feedback")
     interviewer = relationship("User", back_populates="interview_feedback")
@@ -479,7 +448,7 @@ class Plan(Base):
     monthly_ai_credits = Column(Integer, default=1000)
     allow_autonomous_sourcing = Column(Boolean, default=True)
     allow_custom_roadmaps = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class AIUsageRecord(Base):
     __tablename__ = "ai_usage_records"
@@ -493,7 +462,7 @@ class AIUsageRecord(Base):
     latency_ms = Column(Integer, default=12)
     tokens_consumed = Column(Integer, default=350)
     error_message = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
     organization = relationship("Organization", back_populates="ai_usage_records")
 
@@ -511,7 +480,7 @@ class Notification(Base):
     link = Column(String(256), default="")
     event_id = Column(String(64), nullable=True, index=True)  # outbox event that caused it (dedupes retries)
     is_read = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     user = relationship("User", back_populates="notifications")
@@ -530,7 +499,7 @@ class AuditLog(Base):
     details_json = Column(Text, default="{}")
     ip_address = Column(String(64), default="127.0.0.1")
     status = Column(String(32), default="SUCCESS")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
     # Relationships
     organization = relationship("Organization", back_populates="audit_logs")
@@ -538,10 +507,7 @@ class AuditLog(Base):
 
     @property
     def details(self):
-        try:
-            return json.loads(self.details_json) if self.details_json else {}
-        except Exception:
-            return {}
+        return _parse_json(self.details_json, {})
 
 class SkillTaxonomy(Base):
     __tablename__ = "skill_taxonomies"
@@ -551,7 +517,7 @@ class SkillTaxonomy(Base):
     category = Column(String(64), default="Languages")
     demand_level = Column(String(32), default="High")
     avg_salary_boost = Column(String(32), default="+15%")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 # =========================================================================
 # 10. ACCOUNT LIFECYCLE: ONE-TIME TOKENS & TEAM INVITATIONS
@@ -569,7 +535,7 @@ class UserToken(Base):
     token_hash = Column(String(64), nullable=False, unique=True, index=True)
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (Index("ix_user_tokens_user_purpose", "user_id", "purpose"),)
 
@@ -586,7 +552,7 @@ class Invitation(Base):
     status = Column(String(16), nullable=False, default="pending", index=True)  # pending | accepted | revoked
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     organization = relationship("Organization")
 
@@ -635,7 +601,7 @@ class Certification(Base):
     issued_on = Column(String(16), default="")   # "2024-05"
     expires_on = Column(String(16), default="")
     credential_url = Column(String(512), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     candidate = relationship("CandidateProfile", back_populates="certifications")
 
@@ -661,8 +627,8 @@ class CandidateNote(Base):
     application_id = Column(String(64), ForeignKey("applications.id", ondelete="SET NULL"), nullable=True, index=True)
     author_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     body = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now, index=True)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     author = relationship("User")
 
@@ -701,7 +667,7 @@ class Document(Base):
     sha256 = Column(String(64), nullable=False, index=True)
     storage_backend = Column(String(16), nullable=False, default="local")
     storage_key = Column(String(512), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 # =========================================================================
@@ -720,17 +686,14 @@ class OutboxEvent(Base):
     organization_id = Column(String(64), nullable=True, index=True)
     actor_user_id = Column(String(64), nullable=True)
     payload_json = Column(Text, nullable=False, default="{}")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
     dispatched_at = Column(DateTime, nullable=True, index=True)
     attempts = Column(Integer, nullable=False, default=0)
     last_error = Column(Text, default="")
 
     @property
     def payload(self):
-        try:
-            return json.loads(self.payload_json) if self.payload_json else {}
-        except Exception:
-            return {}
+        return _parse_json(self.payload_json, {})
 
 
 # =========================================================================
@@ -777,7 +740,7 @@ class Embedding(Base):
     model = Column(String(64), nullable=False)
     content_hash = Column(String(64), nullable=False)  # skip re-embedding unchanged text
     vector = Column(LargeBinary().with_variant(Vector(settings.embedding_dim), "postgresql"), nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (Index("uq_embedding_entity_model", "entity_type", "entity_id", "model", unique=True),)
 
@@ -807,8 +770,8 @@ class Match(Base):
     inputs_hash = Column(String(64), nullable=False, default="")
     # Recruiter decision from the Talent Match screen: new | shortlisted | dismissed
     status = Column(String(16), nullable=False, default="new", index=True)
-    computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     candidate = relationship("CandidateProfile")
     job = relationship("Job")
@@ -875,7 +838,7 @@ class AIRequest(Base):
     latency_ms = Column(Integer, nullable=False, default=0)
     attempts = Column(Text, nullable=False, default="[]")            # providers tried and why they failed
     error = Column(Text, nullable=False, default="")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
 
 class PromptTemplate(Base):
@@ -890,6 +853,6 @@ class PromptTemplate(Base):
     user_template = Column(Text, nullable=False)  # str.format placeholders, e.g. {resume_text}
     notes = Column(Text, nullable=False, default="")
     created_by_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (Index("uq_prompt_key_version", "key", "version", unique=True),)

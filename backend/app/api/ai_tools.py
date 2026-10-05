@@ -115,7 +115,7 @@ def grade_mock_interview_answer(payload: MockInterviewGradeRequest):
         question=payload.question,
         category=payload.category,
         candidate_answer=payload.candidate_answer,
-        job_title=payload.job_title,
+        job_title=payload.job_title or "",
         target_company=payload.target_company or "Top-tier Tech"
     )
 
@@ -126,7 +126,7 @@ def grade_mock_interview_answer(payload: MockInterviewGradeRequest):
 )
 def optimize_job_spec(payload: JobSpecOptimizeRequest):
     return optimize_job_spec_db(
-        raw_job_description=payload.raw_job_description,
+        raw_job_description=payload.raw_job_description or payload.draft_spec or "",
         job_title=payload.job_title,
         industry=payload.industry or "Software & AI"
     )

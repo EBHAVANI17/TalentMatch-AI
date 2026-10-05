@@ -14,6 +14,7 @@ def test_production_refuses_insecure_defaults():
         unsafe.validate_for_runtime()
     message = str(exc.value)
     assert "JWT_SECRET_KEY" in message
+    assert "DATA_ENCRYPTION_KEYS" in message
     assert "DEMO_MODE" in message
     assert "CORS_ORIGINS" in message
 
@@ -22,6 +23,7 @@ def test_production_accepts_safe_config():
     Settings(
         environment="production",
         jwt_secret_key="x" * 48,
+        data_encryption_keys="k" * 44,
         demo_mode=False,
         cors_origins="https://app.example.com",
     ).validate_for_runtime()

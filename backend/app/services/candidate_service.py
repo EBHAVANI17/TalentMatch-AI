@@ -237,7 +237,7 @@ def create_sourced_candidate(db: Session, ctx: TenantContext, payload: SourcedCa
         id=f"usr_src_{uuid.uuid4().hex[:8]}",
         email=email,
         hashed_password=hash_password(secrets.token_urlsafe(32)),
-        full_name=payload.full_name.strip(),
+        full_name=(payload.full_name or "").strip(),
         role="CANDIDATE",
         status="Sourced",
         is_active=False,

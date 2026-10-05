@@ -61,9 +61,10 @@ def analyze_resume_text(
     taxonomy = db.query(SkillTaxonomy).all()
     found_skills = []
     for item in taxonomy:
-        pattern = r"\b" + re.escape(item.name) + r"\b"
+        name = str(item.name)
+        pattern = r"\b" + re.escape(name) + r"\b"
         if re.search(pattern, text, re.IGNORECASE):
-            found_skills.append(item.name)
+            found_skills.append(name)
 
     exp_match = re.search(r"(\d+)\+?\s+years?", text, re.IGNORECASE)
     years = float(exp_match.group(1)) if exp_match else 5.0
@@ -147,7 +148,7 @@ def analyze_resume_text(
             )
 
     words = len(text.split())
-    ats_score = int(min(98, max(75, 70 + len(found_skills) * 2 + min(10, len(detected_verbs)) + (5 if has_contact else 0))))
+    ats_score = min(98, max(75, 70 + len(found_skills) * 2 + min(10, len(detected_verbs)) + (5 if has_contact else 0)))
 
     return ResumeParseResponse(
         name=name,
@@ -221,13 +222,16 @@ def _can_edit(ctx: TenantContext, cand: CandidateProfile) -> bool:
 
 
 def _detail(db: Session, ctx: TenantContext, cand: CandidateProfile) -> CandidateDetailOut:
-    return candidate_service.to_detail(cand, cand.id in candidate_service.contact_visible_ids(db, ctx, [cand.id]))
+    cand_id = str(cand.id)
+    return candidate_service.to_detail(cand, cand_id in candidate_service.contact_visible_ids(db, ctx, [cand_id]))
 
 
 def _audit(db: Session, ctx: TenantContext, action: str, cand: CandidateProfile, details: Optional[dict] = None) -> None:
     log_audit_event(
-        db=db, action=action, module="Candidates", entity="CandidateProfile", entity_id=cand.id,
-        user_id=ctx.user.id, user_email=ctx.user.email, organization_id=ctx.org_id, details=details or {},
+        db=db, action=action, module="Candidates", entity="CandidateProfile", entity_id=str(cand.id),
+        user_id=str(ctx.user.id) if ctx.user and ctx.user.id else None,
+        user_email=str(ctx.user.email) if ctx.user and ctx.user.email else "",
+        organization_id=ctx.org_id if ctx.org_id else None, details=details or {},
     )
 
 
@@ -328,11 +332,18 @@ def update_candidate(
 # Recruiter notes (private to the organization)
 # ---------------------------------------------------------------------------
 def _note_out(note: CandidateNote) -> CandidateNoteOut:
-    return CandidateNoteOut(
-        id=note.id, candidate_id=note.candidate_id, application_id=note.application_id,
-        author_user_id=note.author_user_id, author_name=note.author.full_name if note.author else "Former member",
-        body=note.body, created_at=note.created_at, updated_at=note.updated_at,
-    )
+    n: Any = note
+    data = {
+        "id": n.id,
+        "candidate_id": n.candidate_id,
+        "application_id": n.application_id,
+        "author_user_id": n.author_user_id,
+        "author_name": n.author.full_name if n.author else "Former member",
+        "body": n.body,
+        "created_at": n.created_at,
+        "updated_at": n.updated_at,
+    }
+    return CandidateNoteOut.model_validate(data)
 
 
 def _notes_scope(db: Session, ctx: TenantContext, candidate_id: str) -> CandidateProfile:
@@ -387,7 +398,8 @@ def _own_note(db: Session, ctx: TenantContext, candidate_id: str, note_id: str) 
 @router.patch("/{candidate_id}/notes/{note_id}", response_model=CandidateNoteOut)
 def edit_note(candidate_id: str, note_id: str, payload: CandidateNoteIn, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant)):
     note = _own_note(db, ctx, candidate_id, note_id)
-    note.body = payload.body.strip()
+    note_any: Any = note
+    note_any.body = payload.body.strip()
     db.commit()
     db.refresh(note)
     return _note_out(note)

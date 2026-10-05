@@ -19,9 +19,11 @@ LifecycleAction = Literal["publish", "pause", "close", "archive"]
 
 def _audit(db: Session, ctx: TenantContext, action: str, job: Job, details: Optional[dict] = None) -> None:
     log_audit_event(
-        db=db, action=action, module="Jobs", entity="Job", entity_id=job.id,
-        user_id=ctx.user.id, user_email=ctx.user.email, organization_id=job.organization_id,
-        details={"title": job.title, "status": job.status, **(details or {})},
+        db=db, action=action, module="Jobs", entity="Job", entity_id=str(job.id),
+        user_id=str(ctx.user.id) if ctx.user and ctx.user.id else None,
+        user_email=str(ctx.user.email) if ctx.user and ctx.user.email else "",
+        organization_id=str(job.organization_id) if job.organization_id else None,
+        details={"title": str(job.title), "status": str(job.status), **(details or {})},
     )
 
 
@@ -73,10 +75,12 @@ def create_job(
             detail="Job requisitions must belong to an organization"
         )
     org = db.get(Organization, ctx.org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
     job = job_service.create_job(db, org, ctx.user, payload)
     db.commit()
     db.refresh(job)
-    _audit(db, ctx, "JOB_CREATED", job, {"organization_id": org.id})
+    _audit(db, ctx, "JOB_CREATED", job, {"organization_id": str(org.id)})
     return get_job_out(job)
 
 @router.patch("/{job_id}", response_model=JobOut)

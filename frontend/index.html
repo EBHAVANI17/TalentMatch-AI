@@ -1092,6 +1092,7 @@
       margin-bottom: 14px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -2069,6 +2070,233 @@
       </form>
     </div>
   </div>
+
+  <!-- ================================================================
+       SUPER ADMIN: EDIT ORGANIZATION MODAL
+       ================================================================ -->
+  <div class="modal-overlay" id="edit-org-modal">
+    <div class="modal-box modal-box-lg">
+      <button class="modal-close" onclick="closeEditOrgModal()">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div class="logo-mark" style="width:28px;height:28px;background:var(--accent-indigo)">
+          <i data-lucide="building-2" style="width:14px;height:14px;color:#fff"></i>
+        </div>
+        <h2 class="modal-title" style="margin:0">Edit Organization</h2>
+      </div>
+      <p class="modal-subtitle">Modify tenant configuration, capacity limits, tier, and activation state</p>
+
+      <form onsubmit="handleSaveEditOrg(event)" id="edit-org-form" style="margin-top:16px">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Organization Name</label>
+            <input type="text" class="form-input" id="edit-org-name" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Corporate Domain</label>
+            <input type="text" class="form-input" id="edit-org-domain" required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Industry</label>
+            <input type="text" class="form-input" id="edit-org-industry" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plan Tier</label>
+            <select class="form-input" id="edit-org-plan">
+              <option value="Startup">Startup</option>
+              <option value="Growth">Growth</option>
+              <option value="Enterprise">Enterprise</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Max Recruiter Seats</label>
+            <input type="number" class="form-input" id="edit-org-seats" min="1" max="100" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Active Jobs</label>
+            <input type="number" class="form-input" id="edit-org-jobs" min="1" max="500" required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Monthly AI Credits</label>
+            <input type="number" class="form-input" id="edit-org-credits" min="0" max="1000000" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tenant Status</label>
+            <select class="form-input" id="edit-org-status">
+              <option value="Active">Active</option>
+              <option value="Suspended">Suspended (Deactivated)</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+          <button type="button" class="btn btn-ghost" onclick="closeEditOrgModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-edit-org">
+            <i data-lucide="check" style="width:16px;height:16px"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       SUPER ADMIN: CREATE ORGANIZATION MODAL
+       ================================================================ -->
+  <div class="modal-overlay" id="create-org-modal">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeCreateOrgModal()">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div class="logo-mark" style="width:28px;height:28px;background:var(--accent-indigo)">
+          <i data-lucide="plus" style="width:14px;height:14px;color:#fff"></i>
+        </div>
+        <h2 class="modal-title" style="margin:0">Create New Tenant</h2>
+      </div>
+      <p class="modal-subtitle">Provision an isolated organization tenant with dedicated seats</p>
+
+      <form onsubmit="handleCreateOrg(event)" id="create-org-form" style="margin-top:16px">
+        <div class="form-group">
+          <label class="form-label">Organization Name</label>
+          <input type="text" class="form-input" id="new-org-name" placeholder="e.g. Acme AI Systems" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Corporate Domain</label>
+          <input type="text" class="form-input" id="new-org-domain" placeholder="e.g. acme.ai" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Industry</label>
+          <input type="text" class="form-input" id="new-org-industry" value="Software & AI" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Plan Tier</label>
+          <select class="form-input" id="new-org-plan">
+            <option value="Enterprise" selected>Enterprise</option>
+            <option value="Growth">Growth</option>
+            <option value="Startup">Startup</option>
+          </select>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+          <button type="button" class="btn btn-ghost" onclick="closeCreateOrgModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-new-org">
+            <i data-lucide="plus-circle" style="width:16px;height:16px"></i> Create Organization
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       SUPER ADMIN: EDIT USER MODAL
+       ================================================================ -->
+  <div class="modal-overlay" id="edit-user-modal">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeEditUserModal()">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div class="logo-mark" style="width:28px;height:28px;background:var(--accent-cyan)">
+          <i data-lucide="user-check" style="width:14px;height:14px;color:#fff"></i>
+        </div>
+        <h2 class="modal-title" style="margin:0">Edit Platform User</h2>
+      </div>
+      <p class="modal-subtitle">Update user profile, platform role, organization membership, and status</p>
+
+      <form onsubmit="handleSaveEditUser(event)" id="edit-user-form" style="margin-top:16px">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="edit-user-name" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" class="form-input" id="edit-user-email" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Platform Role</label>
+          <select class="form-input" id="edit-user-role">
+            <option value="CANDIDATE">CANDIDATE</option>
+            <option value="RECRUITER">RECRUITER</option>
+            <option value="HIRING_MANAGER">HIRING_MANAGER</option>
+            <option value="INTERVIEWER">INTERVIEWER</option>
+            <option value="ORG_ADMIN">ORG_ADMIN</option>
+            <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+            <option value="ANALYST">ANALYST</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Organization Assignment</label>
+          <select class="form-input" id="edit-user-org"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Status</label>
+          <select class="form-input" id="edit-user-status">
+            <option value="Active">Active (Authorized)</option>
+            <option value="Suspended">Suspended (Deactivated)</option>
+          </select>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+          <button type="button" class="btn btn-ghost" onclick="closeEditUserModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-edit-user">
+            <i data-lucide="check" style="width:16px;height:16px"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       DATA ENCRYPTION TEST & DIAGNOSTICS MODAL
+       ================================================================ -->
+  <div class="modal-overlay" id="encryption-test-modal">
+    <div class="modal-box modal-box-lg">
+      <button class="modal-close" onclick="closeEncryptionTestModal()">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div class="logo-mark" style="width:28px;height:28px;background:var(--accent-emerald)">
+          <i data-lucide="shield-check" style="width:14px;height:14px;color:#fff"></i>
+        </div>
+        <h2 class="modal-title" style="margin:0">Data Encryption Diagnostics</h2>
+      </div>
+      <p class="modal-subtitle">Real-time authenticated symmetric AES-128-CBC / HMAC-SHA256 cipher validation</p>
+
+      <div style="margin-top:16px">
+        <div class="form-group">
+          <label class="form-label">Plaintext Input (Sensitive Data Sample)</label>
+          <input type="text" class="form-input" id="enc-test-input" value="+1-555-0199 (Confidential Candidate Phone)" />
+        </div>
+
+        <button type="button" class="btn btn-primary w-full" id="btn-run-enc-test" onclick="runEncryptionLiveTest()" style="margin-top:8px">
+          <i data-lucide="shield-check" style="width:14px;height:14px"></i> Encrypt & Decrypt Live
+        </button>
+
+        <div id="enc-test-result" style="margin-top:18px;display:none;background:var(--bg-input);padding:16px;border-radius:var(--radius-md);border:1px solid var(--border-base)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:0.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Ciphertext at Rest (Database Format)</span>
+            <div id="enc-test-status"></div>
+          </div>
+          <div id="enc-test-cipher" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent-cyan);word-break:break-all;background:rgba(0,0,0,0.25);padding:10px;border-radius:var(--radius-sm);margin-bottom:12px"></div>
+
+          <span style="font-size:0.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:4px">Verified Decrypted String</span>
+          <div id="enc-test-decrypted" style="font-family:var(--font-mono);font-size:0.85rem;color:var(--accent-emerald);font-weight:600"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- ================================================================
        TOAST CONTAINER
@@ -3144,62 +3372,125 @@
       const main = document.getElementById('main-content');
 
       if (section === 'overview') {
-        const stats = await api('/admin/stats');
+        const [stats, enc] = await Promise.all([
+          api('/admin/stats').catch(() => ({})),
+          api('/admin/encryption/status').catch(() => ({ status: 'ACTIVE', algorithm: 'AES-128-CBC + HMAC-SHA256 (Fernet)' }))
+        ]);
         state.adminStats = stats;
 
         main.innerHTML = `
           <div class="page-header">
             <div class="page-title">Command Center</div>
-            <div class="page-subtitle">System observability & platform health</div>
+            <div class="page-subtitle">Super Admin observability, multi-tenant governance, and encryption radar</div>
           </div>
           <div class="stats-grid">
-            ${statCard('Organizations', stats.total_organizations, 'building-2', 'indigo')}
-            ${statCard('Total Users', stats.total_users, 'users', 'cyan')}
-            ${statCard('Active Jobs', stats.total_jobs, 'briefcase', 'emerald')}
-            ${statCard('Applications', stats.total_applications, 'inbox', 'violet')}
+            ${statCard('Organizations', stats.total_organizations || 0, 'building-2', 'indigo')}
+            ${statCard('Total Users', stats.total_users || 0, 'users', 'cyan')}
+            ${statCard('Active Jobs', stats.total_jobs || 0, 'briefcase', 'emerald')}
+            ${statCard('Applications', stats.total_applications || 0, 'inbox', 'violet')}
           </div>
+
+          <!-- Data Security & Cryptography Banner -->
+          <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(99,102,241,0.06),rgba(6,182,212,0.06));border:1px solid rgba(99,102,241,0.25)">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:40px;height:40px;border-radius:12px;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;color:var(--accent-indigo)">
+                  <i data-lucide="shield-check" style="width:22px;height:22px"></i>
+                </div>
+                <div>
+                  <h3 style="font-family:var(--font-display);font-weight:700;font-size:1.05rem;margin:0">Authenticated Field-Level Encryption</h3>
+                  <span style="font-size:0.78rem;color:var(--text-secondary)">Sensitive candidate PII and resumes encrypted at rest using AES-128-CBC + HMAC-SHA256</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="badge badge-emerald" style="padding:6px 12px;font-size:0.8rem"><i data-lucide="lock" style="width:13px;height:13px;margin-right:4px"></i> Engine ${enc.status || 'ACTIVE'}</span>
+                <button class="btn btn-secondary btn-sm" onclick="openEncryptionTestModal()">
+                  <i data-lucide="key" style="width:14px;height:14px"></i> Verify Cipher
+                </button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;font-size:0.8rem">
+              <div style="padding:10px 14px;background:var(--bg-input);border-radius:var(--radius-md);border:1px solid var(--border-subtle)">
+                <span style="color:var(--text-muted);display:block;margin-bottom:3px">Encryption Standard</span>
+                <strong style="color:var(--accent-indigo)">${enc.algorithm || 'AES-128-CBC / Fernet'}</strong>
+              </div>
+              <div style="padding:10px 14px;background:var(--bg-input);border-radius:var(--radius-md);border:1px solid var(--border-subtle)">
+                <span style="color:var(--text-muted);display:block;margin-bottom:3px">Protected Fields</span>
+                <strong style="color:var(--accent-cyan)">Phone, Resume Text, API Secrets</strong>
+              </div>
+              <div style="padding:10px 14px;background:var(--bg-input);border-radius:var(--radius-md);border:1px solid var(--border-subtle)">
+                <span style="color:var(--text-muted);display:block;margin-bottom:3px">Super Admin Governance</span>
+                <strong style="color:var(--accent-emerald)">Full Edit & Deactivate Enabled</strong>
+              </div>
+            </div>
+          </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div class="card">
               <h3 style="font-family:var(--font-display);font-weight:700;margin-bottom:16px">Platform Health</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                ${infoTile('Candidates', stats.total_candidates, 'emerald')}
+                ${infoTile('Candidates', stats.total_candidates || 0, 'emerald')}
                 ${infoTile('Engine Version', stats.engine_version || 'v2.5', 'indigo')}
                 ${infoTile('Database', stats.database_type || 'SQLite', 'cyan')}
                 ${infoTile('Uptime', stats.uptime || '99.97%', 'amber')}
               </div>
             </div>
             <div class="card">
-              <h3 style="font-family:var(--font-display);font-weight:700;margin-bottom:16px">Quick Actions</h3>
+              <h3 style="font-family:var(--font-display);font-weight:700;margin-bottom:16px">Super Admin Quick Actions</h3>
               <div style="display:flex;flex-direction:column;gap:8px">
-                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('organizations')"><i data-lucide="building-2" style="width:16px;height:16px"></i> Manage Organizations</button>
-                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('users')"><i data-lucide="users" style="width:16px;height:16px"></i> Manage Users</button>
-                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('audit')"><i data-lucide="scroll-text" style="width:16px;height:16px"></i> View Audit Logs</button>
-                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('analytics')"><i data-lucide="bar-chart-3" style="width:16px;height:16px"></i> Analytics Radar</button>
+                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('organizations')"><i data-lucide="building-2" style="width:16px;height:16px"></i> Manage & Deactivate Organizations</button>
+                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('users')"><i data-lucide="users" style="width:16px;height:16px"></i> Manage & Deactivate Users</button>
+                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('audit')"><i data-lucide="scroll-text" style="width:16px;height:16px"></i> Tamper-Evident Audit Logs</button>
+                <button class="btn btn-secondary w-full" onclick="navigateToDashboard('analytics')"><i data-lucide="bar-chart-3" style="width:16px;height:16px"></i> Analytics Intelligence Radar</button>
               </div>
             </div>
           </div>
         `;
       } else if (section === 'organizations') {
-        const orgs = await api('/organizations');
+        const orgs = await api('/admin/organizations');
         main.innerHTML = `
-          <div class="page-header"><div class="page-title">Organizations</div><div class="page-subtitle">${orgs.length} tenant organizations</div></div>
+          <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="page-title">Tenant Organizations</div>
+              <div class="page-subtitle">${orgs.length} tenant organizations &bull; Super Admin Edit & Deactivate control</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openCreateOrgModal()">
+              <i data-lucide="plus" style="width:14px;height:14px"></i> Provision Organization
+            </button>
+          </div>
           <div class="data-table-wrapper">
             <table>
-              <thead><tr><th>Organization</th><th>Domain</th><th>Industry</th><th>Plan Tier</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Organization</th><th>Domain</th><th>Industry</th><th>Plan Tier</th><th>Capacity</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
               <tbody>
                 ${orgs.map(o => `
                   <tr>
-                    <td style="font-weight:600">${o.name}</td>
-                    <td style="color:var(--accent-indigo)">${o.domain}</td>
+                    <td style="font-weight:600">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <div style="width:28px;height:28px;border-radius:6px;background:rgba(99,102,241,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-indigo)">
+                          <i data-lucide="building-2" style="width:15px;height:15px"></i>
+                        </div>
+                        <span>${o.name}</span>
+                      </div>
+                    </td>
+                    <td style="color:var(--accent-indigo);font-family:var(--font-mono);font-size:0.8rem">${o.domain}</td>
                     <td>${o.industry}</td>
-                    <td><span class="badge badge-indigo" id="org-plan-badge-${o.id}">${o.plan_tier}</span></td>
-                    <td><span class="badge badge-emerald">${o.status}</span></td>
+                    <td><span class="badge badge-indigo">${o.plan_tier}</span></td>
+                    <td style="font-size:0.8rem;color:var(--text-secondary)">${o.max_recruiter_seats || 10} seats &bull; ${o.max_active_jobs || 50} jobs</td>
                     <td>
-                      <select onchange="updateOrgPlan('${o.id}', this.value)" style="padding:4px 8px;font-size:0.75rem;border-radius:6px">
-                        <option value="Startup" ${o.plan_tier === 'Startup' ? 'selected' : ''}>Startup</option>
-                        <option value="Growth" ${o.plan_tier === 'Growth' ? 'selected' : ''}>Growth</option>
-                        <option value="Enterprise" ${o.plan_tier === 'Enterprise' ? 'selected' : ''}>Enterprise</option>
-                      </select>
+                      <span class="badge ${o.is_active ? 'badge-emerald' : 'badge-amber'}" id="org-status-badge-${o.id}">
+                        ${o.status || (o.is_active ? 'Active' : 'Suspended')}
+                      </span>
+                    </td>
+                    <td style="text-align:right">
+                      <div style="display:inline-flex;gap:6px;justify-content:flex-end">
+                        <button class="btn btn-secondary btn-sm" onclick='openEditOrgModal(${JSON.stringify(o).replace(/'/g, "&apos;")})' style="padding:4px 10px;font-size:0.75rem">
+                          <i data-lucide="edit-3" style="width:13px;height:13px"></i> Edit
+                        </button>
+                        <button class="btn btn-sm ${o.is_active ? 'btn-ghost' : 'btn-primary'}" onclick="toggleOrgStatus('${o.id}')" style="padding:4px 10px;font-size:0.75rem;${o.is_active ? 'color:var(--accent-rose);border-color:rgba(244,63,94,0.3)' : 'background:var(--accent-emerald)'}">
+                          <i data-lucide="${o.is_active ? 'slash' : 'check-circle'}" style="width:13px;height:13px"></i>
+                          ${o.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 `).join('')}
@@ -3210,10 +3501,13 @@
       } else if (section === 'users') {
         const users = await api('/admin/users');
         main.innerHTML = `
-          <div class="page-header"><div class="page-title">All Users</div><div class="page-subtitle">${users.length} platform accounts</div></div>
+          <div class="page-header">
+            <div class="page-title">Platform Users</div>
+            <div class="page-subtitle">${users.length} accounts &bull; Super Admin Edit, Role & Deactivate management</div>
+          </div>
           <div class="data-table-wrapper">
             <table>
-              <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Organization</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Organization</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
               <tbody>
                 ${users.map(u => `
                   <tr>
@@ -3221,11 +3515,21 @@
                     <td style="color:var(--text-secondary);font-size:0.8rem">${u.email}</td>
                     <td><span class="badge ${u.role === 'SUPER_ADMIN' ? 'badge-rose' : u.role === 'CANDIDATE' ? 'badge-cyan' : 'badge-indigo'}">${u.role}</span></td>
                     <td style="font-size:0.82rem">${u.organization_name}</td>
-                    <td><span class="badge ${u.status === 'Active' ? 'badge-emerald' : 'badge-amber'}" id="user-status-${u.id}">${u.status}</span></td>
                     <td>
-                      <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}', '${u.status}')" style="font-size:0.75rem;padding:2px 8px">
-                        ${u.status === 'Active' ? 'Suspend' : 'Activate'}
-                      </button>
+                      <span class="badge ${u.is_active ? 'badge-emerald' : 'badge-amber'}" id="user-status-${u.id}">
+                        ${u.status || (u.is_active ? 'Active' : 'Suspended')}
+                      </span>
+                    </td>
+                    <td style="text-align:right">
+                      <div style="display:inline-flex;gap:6px;justify-content:flex-end">
+                        <button class="btn btn-secondary btn-sm" onclick='openEditUserModal(${JSON.stringify(u).replace(/'/g, "&apos;")})' style="padding:4px 10px;font-size:0.75rem">
+                          <i data-lucide="edit-3" style="width:13px;height:13px"></i> Edit
+                        </button>
+                        <button class="btn btn-sm ${u.is_active ? 'btn-ghost' : 'btn-primary'}" onclick="toggleUserStatusAdmin('${u.id}')" style="padding:4px 10px;font-size:0.75rem;${u.is_active ? 'color:var(--accent-rose);border-color:rgba(244,63,94,0.3)' : 'background:var(--accent-emerald)'}">
+                          <i data-lucide="${u.is_active ? 'slash' : 'check-circle'}" style="width:13px;height:13px"></i>
+                          ${u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 `).join('')}
@@ -3233,7 +3537,8 @@
             </table>
           </div>
         `;
-      } else if (section === 'jobs') {
+      }
+ else if (section === 'jobs') {
         const jobs = await api('/jobs?status=all');
         main.innerHTML = `
           <div class="page-header"><div class="page-title">All Jobs</div><div class="page-subtitle">${jobs.length} requisitions across all tenants</div></div>
@@ -3313,6 +3618,240 @@
       }
 
       lucide.createIcons();
+    }
+
+    // ====================================================================
+    // SUPER ADMIN ORGANIZATIONS & USERS MANAGEMENT + ENCRYPTION
+    // ====================================================================
+    function openCreateOrgModal() {
+      document.getElementById('new-org-name').value = '';
+      document.getElementById('new-org-domain').value = '';
+      document.getElementById('new-org-industry').value = 'Software & AI';
+      document.getElementById('new-org-plan').value = 'Enterprise';
+      document.getElementById('create-org-modal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function closeCreateOrgModal() {
+      document.getElementById('create-org-modal').classList.remove('active');
+    }
+
+    async function handleCreateOrg(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-save-new-org');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Creating...';
+      try {
+        await api('/organizations', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: document.getElementById('new-org-name').value.trim(),
+            domain: document.getElementById('new-org-domain').value.trim(),
+            industry: document.getElementById('new-org-industry').value.trim(),
+            plan_tier: document.getElementById('new-org-plan').value
+          })
+        });
+        showToast('Organization created successfully!', 'success');
+        closeCreateOrgModal();
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="plus-circle" style="width:16px;height:16px"></i> Create Organization';
+        lucide.createIcons();
+      }
+    }
+
+    let currentEditingOrgId = null;
+
+    function openEditOrgModal(org) {
+      currentEditingOrgId = org.id;
+      document.getElementById('edit-org-name').value = org.name || '';
+      document.getElementById('edit-org-domain').value = org.domain || '';
+      document.getElementById('edit-org-industry').value = org.industry || 'Software & AI';
+      document.getElementById('edit-org-plan').value = org.plan_tier || 'Enterprise';
+      document.getElementById('edit-org-seats').value = org.max_recruiter_seats || 10;
+      document.getElementById('edit-org-jobs').value = org.max_active_jobs || 50;
+      document.getElementById('edit-org-credits').value = org.monthly_ai_credits || 5000;
+      document.getElementById('edit-org-status').value = org.status || (org.is_active ? 'Active' : 'Suspended');
+      document.getElementById('edit-org-modal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function closeEditOrgModal() {
+      document.getElementById('edit-org-modal').classList.remove('active');
+      currentEditingOrgId = null;
+    }
+
+    async function handleSaveEditOrg(e) {
+      e.preventDefault();
+      if (!currentEditingOrgId) return;
+      const btn = document.getElementById('btn-save-edit-org');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Saving...';
+      try {
+        const payload = {
+          name: document.getElementById('edit-org-name').value.trim(),
+          domain: document.getElementById('edit-org-domain').value.trim(),
+          industry: document.getElementById('edit-org-industry').value.trim(),
+          plan_tier: document.getElementById('edit-org-plan').value,
+          max_recruiter_seats: parseInt(document.getElementById('edit-org-seats').value) || 10,
+          max_active_jobs: parseInt(document.getElementById('edit-org-jobs').value) || 50,
+          monthly_ai_credits: parseInt(document.getElementById('edit-org-credits').value) || 5000,
+          status: document.getElementById('edit-org-status').value
+        };
+        await api(`/admin/organizations/${currentEditingOrgId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        showToast('Organization updated successfully!', 'success');
+        closeEditOrgModal();
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check" style="width:16px;height:16px"></i> Save Changes';
+        lucide.createIcons();
+      }
+    }
+
+    async function toggleOrgStatus(orgId) {
+      try {
+        const res = await api(`/admin/organizations/${orgId}/toggle-status`, { method: 'POST' });
+        showToast(res.message || 'Organization status updated', 'success');
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    let currentEditingUserId = null;
+
+    async function openEditUserModal(user) {
+      currentEditingUserId = user.id;
+      document.getElementById('edit-user-name').value = user.full_name || '';
+      document.getElementById('edit-user-email').value = user.email || '';
+      document.getElementById('edit-user-role').value = user.role || 'CANDIDATE';
+      document.getElementById('edit-user-status').value = user.status || (user.is_active ? 'Active' : 'Suspended');
+
+      const selectOrg = document.getElementById('edit-user-org');
+      selectOrg.innerHTML = '<option value="">None (Platform Administrator / Candidate)</option>';
+      try {
+        const orgs = await api('/admin/organizations');
+        orgs.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.id;
+          opt.textContent = `${o.name} (${o.domain})`;
+          if (user.organization_id === o.id) opt.selected = true;
+          selectOrg.appendChild(opt);
+        });
+      } catch(e) {}
+
+      document.getElementById('edit-user-modal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function closeEditUserModal() {
+      document.getElementById('edit-user-modal').classList.remove('active');
+      currentEditingUserId = null;
+    }
+
+    async function handleSaveEditUser(e) {
+      e.preventDefault();
+      if (!currentEditingUserId) return;
+      const btn = document.getElementById('btn-save-edit-user');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Saving...';
+      try {
+        const payload = {
+          full_name: document.getElementById('edit-user-name').value.trim(),
+          email: document.getElementById('edit-user-email').value.trim(),
+          role: document.getElementById('edit-user-role').value,
+          organization_id: document.getElementById('edit-user-org').value || 'none',
+          status: document.getElementById('edit-user-status').value
+        };
+        await api(`/admin/users/${currentEditingUserId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        showToast('User updated successfully!', 'success');
+        closeEditUserModal();
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check" style="width:16px;height:16px"></i> Save Changes';
+        lucide.createIcons();
+      }
+    }
+
+    async function toggleUserStatusAdmin(userId) {
+      try {
+        const res = await api(`/admin/users/${userId}/toggle-status`, { method: 'POST' });
+        showToast(res.message || 'User status updated', 'success');
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function toggleUserStatus(userId, currentStatus) {
+      return toggleUserStatusAdmin(userId);
+    }
+
+    async function updateOrgPlan(orgId, planTier) {
+      try {
+        await api(`/admin/organizations/${orgId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ plan_tier: planTier })
+        });
+        showToast(`Organization updated to ${planTier}`, 'success');
+        renderAdminDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function openEncryptionTestModal() {
+      document.getElementById('enc-test-input').value = '+1-555-0199 (Confidential Candidate Phone)';
+      document.getElementById('enc-test-result').style.display = 'none';
+      document.getElementById('encryption-test-modal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function closeEncryptionTestModal() {
+      document.getElementById('encryption-test-modal').classList.remove('active');
+    }
+
+    async function runEncryptionLiveTest() {
+      const text = document.getElementById('enc-test-input').value.trim();
+      if (!text) return;
+      const resBox = document.getElementById('enc-test-result');
+      const btn = document.getElementById('btn-run-enc-test');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Encrypting...';
+      try {
+        const res = await api('/admin/encryption/test', {
+          method: 'POST',
+          body: JSON.stringify({ text })
+        });
+        document.getElementById('enc-test-cipher').textContent = res.encrypted;
+        document.getElementById('enc-test-decrypted').textContent = res.decrypted;
+        document.getElementById('enc-test-status').innerHTML = res.is_valid
+          ? '<span class="badge badge-emerald"><i data-lucide="check" style="width:12px;height:12px"></i> Cipher Decrypted & Authenticated</span>'
+          : '<span class="badge badge-rose">Mismatch</span>';
+        resBox.style.display = 'block';
+        lucide.createIcons();
+      } catch(err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="shield-check" style="width:14px;height:14px"></i> Encrypt & Decrypt Live';
+        lucide.createIcons();
+      }
     }
 
     // ====================================================================

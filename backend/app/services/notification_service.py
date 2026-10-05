@@ -9,7 +9,7 @@ themselves to CHANNELS.
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from typing import Any, List, Optional, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -65,12 +65,14 @@ class EmailChannel:
     name = "email"
 
     def enabled_for(self, msg: NotificationMessage) -> bool:
-        return settings.notification_email_enabled and msg.user.is_active and msg.kind != "system"
+        user: Any = msg.user
+        return bool(settings.notification_email_enabled and user.is_active and msg.kind != "system")
 
     def send(self, db: Session, msg: NotificationMessage) -> None:
+        user: Any = msg.user
         link = f"{settings.app_base_url.rstrip('/')}{msg.link}" if msg.link else settings.app_base_url
         get_email_sender().send(EmailMessage(
-            to=msg.user.email, subject=msg.title, text=f"{msg.message}\n\n{link}", tags=[f"notification:{msg.kind}"],
+            to=str(user.email), subject=msg.title, text=f"{msg.message}\n\n{link}", tags=[f"notification:{msg.kind}"],
         ))
 
 

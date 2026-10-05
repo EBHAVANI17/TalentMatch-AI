@@ -1,6 +1,6 @@
 import json
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -19,33 +19,35 @@ from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/applications", tags=["Applications Pipeline"])
 
-def get_app_out(app: Application) -> ApplicationOut:
+def get_app_out(application: Application) -> ApplicationOut:
+    app: Any = application
     job = app.job
     cand = app.candidate
-    return ApplicationOut(
-        id=app.id,
-        job_id=app.job_id,
-        job_title=job.title if job else "Engineering Role",
-        company_name=job.organization.name if job and job.organization else "Enterprise Tech",
-        company_logo=job.organization.logo_icon if job and job.organization else "briefcase",
-        candidate_id=app.candidate_id,
-        candidate_name=cand.user.full_name if cand and cand.user else "Candidate",
-        candidate_email=cand.user.email if cand and cand.user else "",
-        candidate_title=cand.title if cand else "Software Engineer",
-        candidate_avatar=cand.user.avatar_url if cand and cand.user else "",
-        candidate_location=cand.location if cand else "Remote",
-        candidate_skills=cand.skills if cand else [],
-        candidate_experience_years=cand.experience_years if cand else 3.0,
-        match_score=app.match_score,
-        stage=app.stage,
-        cover_note=app.cover_note,
-        score_breakdown=app.score_breakdown,
-        applied_date=app.created_at.strftime("%Y-%m-%d"),
-        organization_id=app.organization_id,
-        source=app.source or "applied",
-        created_at=app.created_at,
-        updated_at=app.updated_at
-    )
+    data: Dict[str, Any] = {
+        "id": app.id,
+        "job_id": app.job_id,
+        "job_title": job.title if job else "Engineering Role",
+        "company_name": job.organization.name if job and job.organization else "Enterprise Tech",
+        "company_logo": job.organization.logo_icon if job and job.organization else "briefcase",
+        "candidate_id": app.candidate_id,
+        "candidate_name": cand.user.full_name if cand and cand.user else "Candidate",
+        "candidate_email": cand.user.email if cand and cand.user else "",
+        "candidate_title": cand.title if cand else "Software Engineer",
+        "candidate_avatar": cand.user.avatar_url if cand and cand.user else "",
+        "candidate_location": cand.location if cand else "Remote",
+        "candidate_skills": cand.skills if cand else [],
+        "candidate_experience_years": cand.experience_years if cand else 3.0,
+        "match_score": app.match_score,
+        "stage": app.stage,
+        "cover_note": app.cover_note,
+        "score_breakdown": app.score_breakdown,
+        "applied_date": app.created_at.strftime("%Y-%m-%d") if app.created_at else "",
+        "organization_id": app.organization_id,
+        "source": app.source or "applied",
+        "created_at": app.created_at,
+        "updated_at": app.updated_at,
+    }
+    return ApplicationOut.model_validate(data)
 
 
 @router.get("", response_model=List[ApplicationOut])
@@ -117,8 +119,9 @@ def apply_to_job(
     db.add(app)
 
     # Increment applicant count on job
-    job.applicants_count += 1
-    emit(db, "application.created", organization_id=job.organization_id, actor=current_user, payload={
+    job_any: Any = job
+    job_any.applicants_count = int(job_any.applicants_count or 0) + 1
+    emit(db, "application.created", organization_id=str(job.organization_id) if job.organization_id else None, actor=current_user, payload={
         "application_id": app_id, "job_id": job.id, "candidate_id": candidate.id,
         "match_score": score, "source": app.source,
     })
@@ -130,11 +133,11 @@ def apply_to_job(
         action="APPLICATION_SUBMITTED",
         module="Applications",
         entity="Application",
-        entity_id=app.id,
-        user_id=current_user.id,
-        user_email=current_user.email,
-        organization_id=job.organization_id,
-        details={"job_id": job.id, "match_score": score}
+        entity_id=str(app.id),
+        user_id=str(current_user.id) if current_user.id else None,
+        user_email=str(current_user.email),
+        organization_id=str(job.organization_id) if job.organization_id else None,
+        details={"job_id": str(job.id), "match_score": score}
     )
 
     return get_app_out(app)
@@ -161,10 +164,10 @@ def update_application_stage(
         action="STAGE_UPDATED",
         module="Applications",
         entity="Application",
-        entity_id=app.id,
-        user_id=current_user.id,
-        user_email=current_user.email,
-        organization_id=app.job.organization_id if app.job else None,
+        entity_id=str(app.id),
+        user_id=str(current_user.id) if current_user.id else None,
+        user_email=str(current_user.email),
+        organization_id=str(app.job.organization_id) if app.job and app.job.organization_id else None,
         details={"old_stage": old_stage, "new_stage": app.stage, "reason": payload.reason}
     )
 

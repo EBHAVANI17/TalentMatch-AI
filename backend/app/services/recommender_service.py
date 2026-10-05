@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.models.db_models import CandidateProfile, Job
 from app.models.schemas import (
@@ -39,13 +39,20 @@ def build_skill_recommendations(missing_skills: List[str]) -> List[SkillRecommen
         ))
     return recs
 
-def calculate_match(candidate: CandidateProfile, job: Job) -> Tuple[int, MatchExplanation]:
+def calculate_match(candidate: CandidateProfile, job: Job, db: Optional[Session] = None) -> Tuple[int, MatchExplanation]:
     """Score with the v2 engine (app/matching) and return it in the original response shape."""
     from sqlalchemy.orm import object_session
 
     from app.matching.service import score_one
 
-    result = score_one(object_session(candidate) or object_session(job), job, candidate)
+    sess = db or object_session(candidate) or object_session(job)
+    if sess is not None:
+        result = score_one(sess, job, candidate)
+    else:
+        from app.core.database import SessionLocal
+        with SessionLocal() as fallback_db:
+            result = score_one(fallback_db, job, candidate)
+
     by_key = {f.key: f for f in result.factors}
 
     def pct(key: str) -> float:
@@ -78,65 +85,74 @@ def calculate_match(candidate: CandidateProfile, job: Job) -> Tuple[int, MatchEx
     return result.score, explanation
 
 def get_job_out(job: Job) -> JobOut:
-    return JobOut(
-        id=job.id,
-        organization_id=job.organization_id,
-        company_name=job.organization.name if job.organization else "Enterprise Tech",
-        company_domain=job.organization.domain if job.organization else "tech.io",
-        company_logo=job.organization.logo_icon if job.organization else "briefcase",
-        title=job.title,
-        department=job.department,
-        description=job.description,
-        key_responsibilities=job.responsibilities,
-        required_skills=job.required_skills,
-        preferred_skills=job.preferred_skills,
-        min_experience_years=job.min_experience_years,
-        location=job.location,
-        workplace_type=job.workplace_type,
-        salary_min=job.salary_min,
-        salary_max=job.salary_max,
-        equity=job.equity,
-        required_education=job.required_education,
-        urgency=job.urgency,
-        status=job.status,
-        benefits=job.benefits,
-        applicants_count=job.applicants_count,
-        employment_type=job.employment_type or "Full-time",
-        openings=job.openings or 1,
-        max_experience_years=job.max_experience_years,
-        seniority=job.seniority or "",
-        industry=job.industry or "",
-        application_deadline=job.application_deadline,
-        published_at=job.published_at,
-        closed_at=job.closed_at,
-        screening_questions=job.screening_questions,
-        interview_criteria=job.interview_criteria,
-        posted_date=(job.published_at or job.created_at).strftime("%Y-%m-%d"),
-        created_at=job.created_at,
-        updated_at=job.updated_at
-    )
+    j: Any = job
+    org = j.organization
+    posted = j.published_at or j.created_at
+    posted_date = posted.strftime("%Y-%m-%d") if posted is not None else ""
+    data: Dict[str, Any] = {
+        "id": j.id,
+        "organization_id": j.organization_id,
+        "company_name": org.name if org else "Enterprise Tech",
+        "company_domain": org.domain if org else "tech.io",
+        "company_logo": org.logo_icon if org else "briefcase",
+        "title": j.title,
+        "department": j.department,
+        "description": j.description,
+        "key_responsibilities": j.responsibilities,
+        "responsibilities": j.responsibilities,
+        "required_skills": j.required_skills,
+        "preferred_skills": j.preferred_skills,
+        "min_experience_years": j.min_experience_years,
+        "location": j.location,
+        "workplace_type": j.workplace_type,
+        "salary_min": j.salary_min,
+        "salary_max": j.salary_max,
+        "equity": j.equity,
+        "required_education": j.required_education,
+        "urgency": j.urgency,
+        "status": j.status,
+        "benefits": j.benefits,
+        "applicants_count": j.applicants_count,
+        "employment_type": j.employment_type or "Full-time",
+        "openings": j.openings or 1,
+        "max_experience_years": j.max_experience_years,
+        "seniority": j.seniority or "",
+        "industry": j.industry or "",
+        "application_deadline": j.application_deadline,
+        "published_at": j.published_at,
+        "closed_at": j.closed_at,
+        "screening_questions": j.screening_questions,
+        "interview_criteria": j.interview_criteria,
+        "posted_date": posted_date,
+        "created_at": j.created_at,
+        "updated_at": j.updated_at,
+    }
+    return JobOut.model_validate(data)
 
 def get_candidate_out(cand: CandidateProfile) -> CandidateProfileOut:
-    return CandidateProfileOut(
-        id=cand.id,
-        user_id=cand.user_id,
-        name=cand.user.full_name if cand.user else "Candidate",
-        email=cand.user.email if cand.user else "",
-        title=cand.title,
-        bio=cand.bio,
-        skills=cand.skills,
-        experience_years=cand.experience_years,
-        location=cand.location,
-        remote_preference=cand.remote_preference,
-        expected_salary=cand.expected_salary,
-        education=cand.education,
-        github_url=cand.github_url,
-        linkedin_url=cand.linkedin_url,
-        portfolio_url=cand.portfolio_url,
-        ats_score=cand.ats_score,
-        profile_strength=cand.profile_strength,
-        avatar_url=cand.user.avatar_url if cand.user else ""
-    )
+    c: Any = cand
+    user = c.user
+    data: Dict[str, Any] = {
+        "id": c.id,
+        "user_id": c.user_id,
+        "name": user.full_name if user else "Candidate",
+        "email": user.email if user else "",
+        "title": c.title,
+        "bio": c.bio,
+        "skills": c.skills,
+        "experience_years": c.experience_years,
+        "location": c.location,
+        "remote_preference": c.remote_preference,
+        "expected_salary": c.expected_salary,
+        "education": c.education,
+        "github_url": c.github_url,
+        "linkedin_url": c.linkedin_url,
+        "portfolio_url": c.portfolio_url,
+        "ats_score": c.ats_score,
+        "profile_strength": c.profile_strength,
+        "avatar_url": user.avatar_url if user else "",
+    }
+    return CandidateProfileOut.model_validate(data)
 
 def recommend_jobs_for_candidate_db(db: Session, candidate_id: str) -> List[JobMatchResult]:
     candidate = db.query(CandidateProfile).filter(CandidateProfile.id == candidate_id).first()
@@ -147,7 +163,7 @@ def recommend_jobs_for_candidate_db(db: Session, candidate_id: str) -> List[JobM
     results = []
 
     for j in jobs:
-        score, explanation = calculate_match(candidate, j)
+        score, explanation = calculate_match(candidate, j, db=db)
         results.append(JobMatchResult(
             job=get_job_out(j),
             match_score=score,
@@ -168,11 +184,11 @@ def recommend_candidates_for_job_db(db: Session, job_id: str, candidate_query=No
 
     # Get existing applications for pipeline stages
     from app.models.db_models import Application
-    apps = {a.candidate_id: a.stage for a in db.query(Application).filter(Application.job_id == job_id).all()}
+    apps: Dict[str, str] = {str(a.candidate_id): str(a.stage) for a in db.query(Application).filter(Application.job_id == job_id).all()}
 
     for c in candidates:
-        score, explanation = calculate_match(c, job)
-        stage = apps.get(c.id, "Sourced")
+        score, explanation = calculate_match(c, job, db=db)
+        stage = apps.get(str(c.id), "Sourced")
         results.append(CandidateMatchResult(
             candidate=get_candidate_out(c),
             match_score=score,

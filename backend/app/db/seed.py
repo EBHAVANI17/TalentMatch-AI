@@ -1,5 +1,6 @@
 import json
 import uuid
+from typing import Any, Dict, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.core.config import settings
@@ -330,7 +331,8 @@ def seed_demo_data():
             }
         ]
 
-        for c in candidates_raw:
+        for c_item in candidates_raw:
+            c: Dict[str, Any] = c_item
             user = User(
                 id=c["user_id"],
                 email=c["email"],

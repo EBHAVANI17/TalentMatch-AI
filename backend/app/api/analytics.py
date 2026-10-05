@@ -17,13 +17,4 @@ def get_overview(db: Session = Depends(get_db)):
 @router.get("/skills-taxonomy", response_model=List[SkillTaxonomyOut])
 def get_taxonomy(db: Session = Depends(get_db)):
     skills = db.query(SkillTaxonomy).all()
-    return [
-        SkillTaxonomyOut(
-            id=s.id,
-            name=s.name,
-            category=s.category,
-            demand_level=s.demand_level,
-            avg_salary_boost=s.avg_salary_boost
-        )
-        for s in skills
-    ]
+    return [SkillTaxonomyOut.model_validate(s) for s in skills]

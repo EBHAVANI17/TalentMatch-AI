@@ -120,12 +120,41 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
+    domain: Optional[str] = None
     industry: Optional[str] = None
     plan_tier: Optional[str] = None
     status: Optional[str] = None
+    is_active: Optional[bool] = None
     max_recruiter_seats: Optional[int] = None
     max_active_jobs: Optional[int] = None
     monthly_ai_credits: Optional[int] = None
+
+class AdminUserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    organization_id: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class EncryptionStatusOut(BaseModel):
+    status: str
+    algorithm: str
+    key_derived: bool
+    key_source: str
+    keys_configured: int
+    token_prefix: str
+    protected_fields: List[str]
+    self_test_passed: bool
+
+class EncryptionTestRequest(BaseModel):
+    text: str = Field(..., max_length=500)
+
+class EncryptionTestResponse(BaseModel):
+    original: str
+    encrypted: str
+    decrypted: str
+    is_valid: bool
 
 # =========================================================================
 # 3. CANDIDATE PROFILES & SUB-ENTITIES
@@ -292,9 +321,9 @@ class CandidateProfileUpdate(BaseModel):
 
 class SourcedCandidateCreate(CandidateProfileUpdate):
     """A recruiter adds someone who isn't on the platform yet. Private to the recruiter's organization."""
-    full_name: str = Field(min_length=1, max_length=128)
+    full_name: str = Field(..., min_length=1, max_length=128)
     email: EmailStr
-    title: str = Field("", max_length=128)
+    title: Optional[str] = Field("", max_length=128)
     # From POST /ai/resume/parse (recruiter, no candidate yet): attach that file as their resume
     resume_document_id: Optional[str] = None
 

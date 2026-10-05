@@ -11,7 +11,7 @@ from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/organizations", tags=["Organizations (Tenants)"])
 
-PLATFORM_CONTROLLED_FIELDS = {"plan_tier", "status", "max_recruiter_seats", "max_active_jobs", "monthly_ai_credits"}
+PLATFORM_CONTROLLED_FIELDS = {"plan_tier", "status", "is_active", "domain", "max_recruiter_seats", "max_active_jobs", "monthly_ai_credits"}
 
 @router.get("", response_model=List[OrganizationOut])
 def get_organizations(
@@ -111,9 +111,19 @@ def update_organization(
                 detail="Only platform administrators can change: " + ", ".join(attempted)
             )
 
+    if payload.domain is not None and payload.domain != org.domain:
+        if not ctx.is_super_admin:
+            raise HTTPException(status_code=403, detail="Only platform administrators can change domain")
+        existing_domain = db.query(Organization).filter(Organization.domain == payload.domain, Organization.id != org.id).first()
+        if existing_domain:
+            raise HTTPException(status_code=400, detail="Domain is already in use by another organization")
+        org.domain = payload.domain
     if payload.name is not None: org.name = payload.name
     if payload.industry is not None: org.industry = payload.industry
     if payload.plan_tier is not None: org.plan_tier = payload.plan_tier
+    if payload.is_active is not None:
+        org.is_active = payload.is_active
+        org.status = "Active" if payload.is_active else "Suspended"
     if payload.status is not None:
         org.status = payload.status
         org.is_active = (payload.status == "Active")
