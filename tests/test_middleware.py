@@ -39,20 +39,16 @@ def test_rate_limit_can_be_disabled(monkeypatch):
     assert [client.get("/ping").status_code for _ in range(3)] == [200, 200, 200]
 
 
-def test_auth_endpoints_are_rate_limited():
-    from fastapi.routing import APIRoute
-
-    from app.main import app
-
-    auth_paths = {"/api/v1/auth/login", "/api/v1/auth/register/candidate", "/api/v1/auth/register/employer"}
-    limited = {
-        route.path
-        for route in app.routes
-        if isinstance(route, APIRoute)
-        and route.path in auth_paths
-        and any(d.call.__qualname__.startswith("rate_limit.") for d in route.dependant.dependencies)
-    }
-    assert limited == auth_paths
+def test_auth_endpoints_are_rate_limited(client, monkeypatch):
+    """Behavioural check (independent of FastAPI's internal route structure)."""
+    rl.backend.reset()
+    monkeypatch.setattr(rl.settings, "rate_limit_auth", "2/minute")
+    bad = {"email": "nobody@example.com", "password": "wrong-password"}
+    codes = [client.post("/api/v1/auth/login", json=bad).status_code for _ in range(3)]
+    assert codes == [401, 401, 429]
+    signup = client.post("/api/v1/auth/register/candidate", json={"email": "x@example.com", "password": "pw-123456", "full_name": "X"})
+    assert signup.status_code == 429  # same auth bucket for this client
+    rl.backend.reset()
 
 
 def test_api_responses_carry_security_headers(client):

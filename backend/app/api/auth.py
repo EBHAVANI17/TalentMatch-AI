@@ -25,7 +25,7 @@ from app.services.skills_service import set_candidate_skills
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access"])
 
-auth_rate_limit = Depends(rate_limit("auth", settings.rate_limit_auth))
+auth_rate_limit = Depends(rate_limit("auth", lambda: settings.rate_limit_auth))
 
 DEFAULT_SIGNUP_PLAN_ID = "free"
 

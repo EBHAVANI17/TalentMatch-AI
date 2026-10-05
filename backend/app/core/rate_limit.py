@@ -9,7 +9,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple, Union
 
 from fastapi import HTTPException, Request, status
 
@@ -98,14 +98,18 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def rate_limit(scope: str, limit_text: str, key: Callable[[Request], str] = client_ip) -> Callable:
-    """FastAPI dependency: Depends(rate_limit("auth", settings.rate_limit_auth))."""
-    limit = Limit.parse(limit_text)
+def rate_limit(scope: str, limit_text: Union[str, Callable[[], str]], key: Callable[[Request], str] = client_ip) -> Callable:
+    """FastAPI dependency: Depends(rate_limit("auth", lambda: settings.rate_limit_auth)).
+
+    Pass a callable to read the limit on every request (so config changes apply without a restart).
+    """
+    def current_limit() -> Limit:
+        return Limit.parse(limit_text() if callable(limit_text) else limit_text)
 
     def dependency(request: Request) -> None:
         if not settings.rate_limit_enabled:
             return
-        allowed, retry_after = hit(f"{scope}:{key(request)}", limit)
+        allowed, retry_after = hit(f"{scope}:{key(request)}", current_limit())
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
