@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_default: str = "300/minute"  # any /api/ request
     rate_limit_auth: str = "10/minute"      # login and sign-up
+    rate_limit_copilot: str = "20/minute"   # copilot questions (each can make two AI calls)
 
     # File storage: local (backend/storage/documents) | s3
     storage_backend: str = "local"

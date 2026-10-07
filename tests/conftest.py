@@ -23,6 +23,7 @@ os.environ.setdefault("DEMO_MODE", "true")
 # The whole suite runs from one client IP; rate limits get their own focused tests.
 os.environ.setdefault("RATE_LIMIT_DEFAULT", "100000/minute")
 os.environ.setdefault("RATE_LIMIT_AUTH", "100000/minute")
+os.environ.setdefault("RATE_LIMIT_COPILOT", "100000/minute")
 os.environ.setdefault("REDIS_URL", "")
 os.environ.setdefault("PASSWORD_HASH_ITERATIONS", "1000")  # production default is 600k
 os.environ.setdefault("STORAGE_BACKEND", "local")

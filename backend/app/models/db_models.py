@@ -856,3 +856,46 @@ class PromptTemplate(Base):
     created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (Index("uq_prompt_key_version", "key", "version", unique=True),)
+
+
+# =========================================================================
+# 19. RECRUITER COPILOT: CONVERSATIONS (private to the user who started them)
+# =========================================================================
+class CopilotConversation(Base):
+    __tablename__ = "copilot_conversations"
+
+    id = Column(String(64), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(EncryptedString(512), nullable=False, default="")  # the first question, in the user's words
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, index=True)
+
+    messages = relationship("CopilotMessage", back_populates="conversation", cascade="all, delete-orphan",
+                            order_by="CopilotMessage.created_at")
+
+
+class CopilotMessage(Base):
+    """Content is stored in reference form ("[C1] scores 86%"); citations map refs to records."""
+    __tablename__ = "copilot_messages"
+
+    id = Column(String(64), primary_key=True)
+    conversation_id = Column(String(64), ForeignKey("copilot_conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(16), nullable=False)  # user | assistant
+    content = Column(EncryptedText, nullable=False, default="")
+    citations_json = Column(Text, nullable=False, default="{}")  # {"C1": {"kind": "candidate", "id": "cand_001"}}
+    follow_ups_json = Column(Text, nullable=False, default="[]")
+    method = Column(String(16), nullable=False, default="")       # ai | rules (assistant messages)
+    notice = Column(String(300), nullable=False, default="")
+    ai_request_id = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
+
+    conversation = relationship("CopilotConversation", back_populates="messages")
+
+    @property
+    def citations(self) -> dict:
+        return _parse_json(self.citations_json, {})
+
+    @property
+    def follow_ups(self) -> list:
+        return _parse_json(self.follow_ups_json, [])
