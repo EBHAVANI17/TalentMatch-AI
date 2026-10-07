@@ -14,6 +14,8 @@ from app.services.audit_service import log_audit_event
 from app.core.crypto import get_encryption_status, encrypt_value, decrypt_value
 from app.core.security import ROLE_PERMISSIONS
 from app.services.account_service import REFRESH, revoke_tokens
+from app.services import membership_service
+from app.models.db_models import Membership
 
 router = APIRouter(
     prefix="/admin",
@@ -73,7 +75,7 @@ def get_all_organizations_admin(db: Session = Depends(get_db)):
     orgs = db.query(Organization).order_by(Organization.created_at.desc()).all()
     results = []
     for o in orgs:
-        user_count = db.query(User).filter(User.organization_id == o.id).count()
+        user_count = db.query(Membership).filter(Membership.organization_id == o.id, Membership.status == "active").count()
         job_count = db.query(Job).filter(Job.organization_id == o.id).count()
         results.append({
             "id": o.id,
@@ -205,8 +207,8 @@ def get_all_users_admin(db: Session = Depends(get_db)):
             "id": u.id,
             "email": u.email,
             "full_name": u.full_name,
-            "role": u.role,
-            "organization_id": u.organization_id,
+            "role": u.role,  # membership-guard: ok (platform admin display)
+            "organization_id": u.organization_id,  # membership-guard: ok (platform admin display)
             "organization_name": u.organization.name if u.organization else "None (Candidate / Admin)",
             "status": u.status or "Active",
             "is_active": u.is_active,
@@ -236,8 +238,9 @@ def update_user_admin(
         raise HTTPException(status_code=400, detail="Status must be 'Active' or 'Suspended'")
     if payload.role is not None and payload.role not in ROLE_PERMISSIONS:
         raise HTTPException(status_code=400, detail=f"Unknown role. Valid roles: {', '.join(ROLE_PERMISSIONS)}")
+    current_role = user.role  # membership-guard: ok (platform admin edit; default-org role)
     is_self = user.id == ctx.user.id
-    if is_self and payload.role is not None and payload.role != user.role:
+    if is_self and payload.role is not None and payload.role != current_role:
         raise HTTPException(status_code=400, detail="You cannot change your own role")
     wants_active = payload.is_active if payload.is_active is not None else (
         payload.status == "Active" if payload.status is not None else None)
@@ -246,23 +249,25 @@ def update_user_admin(
 
     if payload.full_name is not None:
         setattr(user, "full_name", payload.full_name)
-    if payload.role is not None:
-        setattr(user, "role", payload.role)
-    if payload.organization_id is not None:
-        if payload.organization_id in ("", "none", "None"):
-            setattr(user, "organization_id", None)
-        else:
-            org = db.query(Organization).filter(Organization.id == payload.organization_id).first()
-            if not org:
-                raise HTTPException(status_code=400, detail="Target organization does not exist")
-            setattr(user, "organization_id", org.id)
 
     # Organization staff need an organization; platform admins and candidates have none.
+    # Changes go through memberships; the users row only mirrors the default organization.
     if payload.role is not None or payload.organization_id is not None:
-        if user.role in ORGLESS_ROLES and user.organization_id:
-            raise HTTPException(status_code=400, detail=f"{user.role} accounts cannot belong to an organization")
-        if user.role not in ORGLESS_ROLES and not user.organization_id:
-            raise HTTPException(status_code=400, detail=f"{user.role} accounts must belong to an organization")
+        new_role = payload.role or current_role
+        clearing = payload.organization_id in ("", "none", "None")
+        target_org_id = None if clearing else (payload.organization_id or user.organization_id)  # membership-guard: ok (default org)
+        if new_role in ORGLESS_ROLES:
+            if target_org_id:
+                raise HTTPException(status_code=400, detail=f"{new_role} accounts cannot belong to an organization")
+            if new_role != current_role:
+                membership_service.assign_platform_role(db, user, new_role, ctx.user)
+        else:
+            if not target_org_id:
+                raise HTTPException(status_code=400, detail=f"{new_role} accounts must belong to an organization")
+            org = db.get(Organization, target_org_id)
+            if not org:
+                raise HTTPException(status_code=400, detail="Target organization does not exist")
+            membership_service.set_staff_role(db, user, org, new_role, ctx.user)
 
     if wants_active is not None:
         setattr(user, "is_active", wants_active)
@@ -281,16 +286,16 @@ def update_user_admin(
         entity_id=user.id,
         user_id=ctx.user.id,
         user_email=ctx.user.email,
-        organization_id=user.organization_id,
-        details={"email": user.email, "role": user.role, "status": user.status}
+        organization_id=user.organization_id,  # membership-guard: ok (platform admin display)
+        details={"email": user.email, "role": user.role, "status": user.status}  # membership-guard: ok (platform admin display)
     )
 
     return {
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
-        "role": user.role,
-        "organization_id": user.organization_id,
+        "role": user.role,  # membership-guard: ok (platform admin display)
+        "organization_id": user.organization_id,  # membership-guard: ok (platform admin display)
         "status": user.status,
         "is_active": user.is_active,
         "message": f"User '{user.full_name}' updated successfully"
@@ -325,7 +330,7 @@ def toggle_user_status_admin(
         entity_id=user.id,
         user_id=ctx.user.id,
         user_email=ctx.user.email,
-        organization_id=user.organization_id,
+        organization_id=user.organization_id,  # membership-guard: ok (platform admin display)
         details={"status": user.status, "is_active": user.is_active}
     )
 

@@ -805,8 +805,11 @@ def seed_demo_data():
         db.close()
 
 def _finalize_demo_data(db):
-    """Fill fields the seed lists above don't set: normalized skills, tenant on applications, publish dates."""
+    """Fill fields the seed lists above don't set: memberships, normalized skills, tenant on applications, publish dates."""
+    from app.services.membership_service import ensure_memberships_from_mirror
     from app.services.skills_service import sync_all_skill_links
+
+    ensure_memberships_from_mirror(db)
 
     from app.services.pipeline_service import STAGE_ALIASES
 

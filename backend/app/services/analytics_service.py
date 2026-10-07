@@ -2,7 +2,7 @@ from collections import Counter
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.db_models import (
-    CandidateProfile, Job, Application, Organization, User, AuditLog, Resume, AIUsageRecord
+    CandidateProfile, Job, Application, Membership, Organization, User, AuditLog, Resume, AIUsageRecord
 )
 from app.models.schemas import AdminSystemStats
 
@@ -42,8 +42,10 @@ def get_analytics_overview_db(db: Session) -> dict:
 def get_admin_system_stats_db(db: Session) -> AdminSystemStats:
     total_orgs = db.query(Organization).count()
     total_users = db.query(User).count()
-    total_candidates = db.query(User).filter(User.role == "CANDIDATE").count()
-    total_recruiters = db.query(User).filter(User.role.in_(["EMPLOYER_ADMIN", "ORG_ADMIN", "RECRUITER"])).count()
+    total_candidates = db.query(User).filter(User.role == "CANDIDATE").count()  # membership-guard: ok (platform stat)
+    total_recruiters = db.query(Membership.user_id).filter(
+        Membership.status == "active", Membership.role.in_(["EMPLOYER_ADMIN", "ORG_ADMIN", "RECRUITER"])
+    ).distinct().count()
     total_jobs = db.query(Job).count()
     total_apps = db.query(Application).count()
     total_resumes = db.query(Resume).count()

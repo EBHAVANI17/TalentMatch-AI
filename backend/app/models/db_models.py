@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, Index, Enum, LargeBinary
+    CheckConstraint, Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, Index, Enum, LargeBinary, false as sa_false
 )
 from pgvector.sqlalchemy import Vector
 
@@ -38,9 +38,16 @@ class Organization(Base):
     plan_tier = Column(String(32), default="Enterprise")
     logo_icon = Column(String(64), default="briefcase")
     website = Column(String(256), default="")
-    status = Column(String(32), default="Active", index=True) # Active, Suspended, Inactive
+    status = Column(String(32), default="Active", index=True) # Active, Suspended, Inactive, deleted (soft delete)
     is_active = Column(Boolean, default=True)
-    
+
+    # Hierarchy (one level): a parent company manages client companies.
+    # Rules are enforced in services/membership_service.py; the CHECK keeps the shape valid.
+    org_type = Column(String(16), nullable=False, default="standalone", server_default="standalone")  # standalone | parent | client
+    parent_id = Column(String(64), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
+    # Clients only: whether admins of the parent may manage this client's memberships
+    allow_parent_access = Column(Boolean, nullable=False, default=False, server_default=sa_false())
+
     # Entitlement Limits
     max_recruiter_seats = Column(Integer, default=10)
     max_active_jobs = Column(Integer, default=50)
@@ -52,11 +59,21 @@ class Organization(Base):
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
-    # Relationships
-    users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
+    # Relationships (organizations are soft-deleted, never removed with their people)
+    users = relationship("User", back_populates="organization")
     jobs = relationship("Job", back_populates="organization", cascade="all, delete-orphan")
     ai_usage_records = relationship("AIUsageRecord", back_populates="organization")
     audit_logs = relationship("AuditLog", back_populates="organization")
+    parent = relationship("Organization", remote_side=[id], back_populates="clients")
+    clients = relationship("Organization", back_populates="parent")
+
+    __table_args__ = (
+        CheckConstraint("org_type IN ('standalone', 'parent', 'client')", name="org_type_valid"),
+        CheckConstraint(
+            "(org_type = 'client' AND parent_id IS NOT NULL) OR (org_type <> 'client' AND parent_id IS NULL)",
+            name="org_parent_matches_type",
+        ),
+    )
 
 # =========================================================================
 # 2. USERS & ROLES (RBAC & IDENTITY)
@@ -69,10 +86,10 @@ class User(Base):
     hashed_password = Column(String(256), nullable=False)
     full_name = Column(String(128), nullable=False)
     
-    # Roles: SUPER_ADMIN, ORG_ADMIN, RECRUITER, HIRING_MANAGER, INTERVIEWER, CANDIDATE, ANALYST
-    # Backward compatible with EMPLOYER_ADMIN
+    # Platform role (SUPER_ADMIN, CANDIDATE) is authoritative here. For organization staff, role and
+    # organization_id MIRROR the user's default membership and are written only by
+    # services/membership_service.py; access decisions use memberships (core/tenancy.py).
     role = Column(String(32), nullable=False, default="CANDIDATE", index=True)
-    
     organization_id = Column(String(64), ForeignKey("organizations.id"), nullable=True, index=True)
     avatar_url = Column(String(512), default="")
     status = Column(String(32), default="Active", index=True) # Active, Suspended, Pending_Verification
@@ -89,6 +106,31 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user")
     interview_feedback = relationship("InterviewFeedback", back_populates="interviewer")
+    memberships = relationship("Membership", back_populates="user", cascade="all, delete-orphan",
+                               passive_deletes=True)
+
+
+class Membership(Base):
+    """A user's role in one organization. A user can belong to many organizations."""
+    __tablename__ = "memberships"
+
+    id = Column(String(64), primary_key=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # RESTRICT: organizations are soft-deleted, so memberships are never removed by an org delete
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
+    role = Column(String(32), nullable=False)                   # an organization role (ORG_ROLES)
+    status = Column(String(16), nullable=False, default="active", server_default="active")  # active | suspended
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    user = relationship("User", back_populates="memberships")
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        Index("uq_memberships_user_org", "user_id", "organization_id", unique=True),
+        Index("ix_memberships_org_status", "organization_id", "status"),
+        CheckConstraint("status IN ('active', 'suspended')", name="membership_status_valid"),
+    )
 
 # =========================================================================
 # 3. CANDIDATE PROFILES & DETAILED ENTITIES
@@ -535,6 +577,8 @@ class UserToken(Base):
     token_hash = Column(String(64), nullable=False, unique=True, index=True)
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
+    # Refresh tokens: the organization the session is working in, kept across refreshes
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (Index("ix_user_tokens_user_purpose", "user_id", "purpose"),)

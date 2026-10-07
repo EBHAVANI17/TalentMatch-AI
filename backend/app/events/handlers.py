@@ -5,16 +5,19 @@ from sqlalchemy.orm import Session
 
 from app.core.tenancy import ORG_ROLES
 from app.events.bus import on
-from app.models.db_models import Application, OutboxEvent, User
+from app.models.db_models import Application, Membership, OutboxEvent, User
 from app.services.notification_service import notify
 
 
 def _hiring_team(db: Session, org_id: Optional[str], exclude_user_id: Optional[str]) -> List[User]:
     if not org_id:
         return []
+    """Active members of the event's organization (org_id comes from the event payload)."""
     return (
         db.query(User)
-        .filter(User.organization_id == org_id, User.role.in_(ORG_ROLES), User.is_active.is_(True))
+        .join(Membership, Membership.user_id == User.id)
+        .filter(Membership.organization_id == org_id, Membership.status == "active",
+                Membership.role.in_(ORG_ROLES), User.is_active.is_(True))
         .filter(User.id != (exclude_user_id or ""))
         .all()
     )

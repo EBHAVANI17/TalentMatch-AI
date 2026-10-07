@@ -246,3 +246,23 @@ Code: `backend/app/copilot/` (tools, references, rules fallback, service), route
   encrypted. Labels and links are resolved when read, through the tenancy rules.
 - **Access**: recruiters, hiring managers and org admins (`candidates:search_pool`). Rate limit:
   `RATE_LIMIT_COPILOT`. Read-only for now; actions with approval come with agents (Phase 7).
+
+## Organizations, memberships and switching
+
+- A person can belong to several organizations with a different role in each (`memberships`). Platform
+  roles (`SUPER_ADMIN`, `CANDIDATE`) stay on `users.role` and hold no memberships.
+- The access token carries `active_org_id`. `core/tenancy.py` loads the user, the active membership and the
+  organization in one query on every request, so a revoked membership stops working immediately. Tokens
+  without `active_org_id` (the classic workspace) use the user's default organization.
+- `POST /auth/switch-org` issues a new token pair for another organization; refresh keeps the active one.
+  `GET /me/organizations` lists the caller's memberships. The web app sends `X-Org-Id`; non-GET requests
+  whose header doesn't match the token's organization get 409 (another tab switched).
+- `users.organization_id` / `users.role` mirror the default membership and are written only by
+  `services/membership_service.py`. `tests/test_membership_guard.py` fails if other code reads them without a
+  `# membership-guard: ok (<reason>)` marker.
+- Hierarchy is one level: a `parent` organization has `client` organizations. Parent admins
+  (`org:manage_clients`) can create clients and manage a client's memberships only while the client has
+  `allow_parent_access`; this never grants access to the client's data. Every such change is audited.
+- Rules: the last active admin can't be removed, suspended or demoted (409); seats are per organization
+  (active memberships + pending invitations); organizations are soft-deleted (`status = deleted`).
+- Existing accounts accept invitations while signed in as the invited, verified email.

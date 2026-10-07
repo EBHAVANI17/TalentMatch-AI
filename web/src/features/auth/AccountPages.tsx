@@ -154,9 +154,17 @@ export function AcceptInvitationPage() {
   const token = params.get("token");
   const hint = usePasswordHint();
   const navigate = useNavigate();
-  const { startSession } = useAuth();
+  const { startSession, user, switchOrg } = useAuth();
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  // Signed in already: accept with this account (the API checks the invited email matches)
+  const acceptAsMe = useMutation({
+    mutationFn: () => api<TokenResponse>("/auth/accept-invitation", { method: "POST", body: { token } }),
+    onSuccess: async (session) => {
+      if (session.user.organization_id) await switchOrg(session.user.organization_id);
+      navigate("/", { replace: true });
+    },
+  });
   const accept = useMutation({
     mutationFn: () =>
       api<TokenResponse>("/auth/accept-invitation", {
@@ -175,6 +183,22 @@ export function AcceptInvitationPage() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     accept.mutate();
+  }
+
+  if (user) {
+    return (
+      <AuthLayout title="Join the organization" subtitle={`You're signed in as ${user.email}.`} footer={<BackToSignIn />}>
+        <div className="flex flex-col gap-4">
+          {acceptAsMe.isError && <Alert>{acceptAsMe.error.message}</Alert>}
+          <p className="text-sm text-muted">
+            Accepting adds this organization to your account. You can switch between your organizations from the header.
+          </p>
+          <Button onClick={() => acceptAsMe.mutate()} loading={acceptAsMe.isPending}>
+            Accept invitation
+          </Button>
+        </div>
+      </AuthLayout>
+    );
   }
 
   return (

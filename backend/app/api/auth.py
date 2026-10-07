@@ -2,19 +2,22 @@ import json
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import (
     hash_password, verify_password, password_needs_rehash, create_access_token,
-    get_current_user
+    get_current_user, get_current_user_optional, security_bearer
 )
-from app.models.db_models import User, Organization, CandidateProfile, Plan
+from app.core.tenancy import TenantContext, resolve_context
+from app.models.db_models import User, Organization, CandidateProfile, Plan, Membership
 from app.models.schemas import (
     LoginRequest, TokenResponse, RegisterCandidateRequest, RegisterEmployerRequest, UserOut,
     RefreshTokenRequest, TokenRequest, ForgotPasswordRequest, ResetPasswordRequest,
-    AcceptInvitationRequest, MessageResponse
+    AcceptInvitationRequest, MessageResponse, SwitchOrgRequest
 )
+from app.services import membership_service
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.services import account_service
@@ -30,15 +33,38 @@ auth_rate_limit = Depends(rate_limit("auth", lambda: settings.rate_limit_auth))
 DEFAULT_SIGNUP_PLAN_ID = "free"
 
 
-def issue_session(db: Session, user: User, refresh_token: Optional[str] = None) -> TokenResponse:
-    """Access token (JWT) for API calls plus a rotating refresh token."""
-    token = create_access_token(data={"sub": user.id, "email": user.email, "role": user.role})
+def user_out(db: Session, ctx: TenantContext) -> UserOut:
+    """The user as the web apps see it: organization_id and role describe the ACTIVE organization."""
+    out = UserOut.model_validate(ctx.user)
+    out.organization_id = ctx.org_id
+    out.role = ctx.role or out.role
+    out.active_organization_id = ctx.org_id
+    out.memberships_count = db.query(Membership).filter(
+        Membership.user_id == ctx.user.id, Membership.status == membership_service.ACTIVE
+    ).count()
+    return out
+
+
+def issue_session(db: Session, user: User, org_id: Optional[str] = None) -> TokenResponse:
+    """Access token (JWT) plus a rotating refresh token, both working in one organization.
+
+    org_id must be an active membership; otherwise (or when omitted) the user's default organization is used.
+    """
+    membership = membership_service.active_membership(db, user.id, org_id) if org_id else None
+    if membership is None:
+        membership = membership_service.active_membership(db, user.id, user.organization_id)  # membership-guard: ok (default org)
+    if membership is not None and not membership_service.is_org_usable(membership.organization):
+        membership = None
+    ctx = TenantContext(user=user, membership=membership, organization=membership.organization if membership else None)
+    claims = {"sub": user.id, "email": user.email, "role": ctx.role}
+    if ctx.org_id:
+        claims["active_org_id"] = ctx.org_id
     return TokenResponse(
-        access_token=token,
+        access_token=create_access_token(data=claims),
         token_type="bearer",
         expires_in=settings.access_token_expire_hours * 3600,
-        refresh_token=refresh_token or account_service.issue_refresh_token(db, user),
-        user=UserOut.model_validate(user)
+        refresh_token=account_service.issue_refresh_token(db, user, ctx.org_id),
+        user=user_out(db, ctx),
     )
 
 
@@ -85,8 +111,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         entity_id=user.id,
         user_id=user.id,
         user_email=user.email,
-        organization_id=user.organization_id,
-        details={"role": user.role}
+        organization_id=user.organization_id,  # membership-guard: ok (audit label only)
     )
     return issue_session(db, user)
 
@@ -178,19 +203,15 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
     db.add(org)
     db.flush()
 
-    user_id = f"usr_emp_{uuid.uuid4().hex[:8]}"
-    user = User(
-        id=user_id,
+    user = membership_service.create_org_user(
+        db, org=org, role="EMPLOYER_ADMIN", check_seats=False,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
-        role="EMPLOYER_ADMIN",
-        organization_id=org_id,
         avatar_url="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
         email_verified=False,
-        is_active=True
+        is_active=True,
     )
-    db.add(user)
     db.commit()
     db.refresh(user)
 
@@ -212,8 +233,8 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
 @router.post("/refresh", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def refresh_session(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Swap a refresh token for a new access token. Refresh tokens are single-use."""
-    user, new_refresh = account_service.rotate_refresh_token(db, payload.refresh_token)
-    return issue_session(db, user, refresh_token=new_refresh)
+    user, org_id = account_service.rotate_refresh_token(db, payload.refresh_token)
+    return issue_session(db, user, org_id)  # stays in the same organization while it's still a member
 
 
 @router.post("/logout", response_model=MessageResponse)
@@ -247,22 +268,57 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     user = account_service.reset_password(db, payload.token, payload.new_password)
     log_audit_event(
         db=db, action="PASSWORD_RESET", module="Auth", entity="User", entity_id=user.id,
-        user_id=user.id, user_email=user.email, organization_id=user.organization_id,
+        user_id=user.id, user_email=user.email,
     )
     return MessageResponse(message="Password updated. Please sign in again.")
 
 
 @router.post("/accept-invitation", response_model=TokenResponse, dependencies=[auth_rate_limit])
-def accept_invitation(payload: AcceptInvitationRequest, db: Session = Depends(get_db)):
-    user = account_service.accept_invitation(db, payload.token, payload.full_name, payload.password)
+def accept_invitation(
+    payload: AcceptInvitationRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """New people choose a name and password. People who already have an account accept while
+    signed in as the invited (verified) email; the invitation adds a membership."""
+    if account_service.invited_account_exists(db, payload.token):
+        if current_user is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in as the invited email to accept this invitation")
+        membership = account_service.accept_invitation_as(db, payload.token, current_user)
+        user, org_id = current_user, membership.organization_id
+    else:
+        if not payload.full_name or not payload.password:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "full_name and password are required")
+        user = account_service.accept_invitation(db, payload.token, payload.full_name, payload.password)
+        org_id = user.organization_id  # membership-guard: ok (the membership just created)
     log_audit_event(
         db=db, action="INVITATION_ACCEPTED", module="Auth", entity="User", entity_id=user.id,
-        user_id=user.id, user_email=user.email, organization_id=user.organization_id,
-        details={"role": user.role},
+        user_id=user.id, user_email=user.email, organization_id=org_id,
     )
-    return issue_session(db, user)
+    return issue_session(db, user, org_id)
+
+
+@router.post("/switch-org", response_model=TokenResponse, dependencies=[auth_rate_limit])
+def switch_org(payload: SwitchOrgRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """New token pair working in another organization the caller belongs to."""
+    membership = membership_service.active_membership(db, current_user.id, payload.organization_id)
+    if membership is None or not membership_service.is_org_usable(membership.organization):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have access to that organization")
+    log_audit_event(
+        db=db, action="ORGANIZATION_SWITCHED", module="Auth", entity="Organization", entity_id=membership.organization_id,
+        user_id=current_user.id, user_email=current_user.email, organization_id=membership.organization_id,
+        details={"role": membership.role},
+    )
+    return issue_session(db, current_user, membership.organization_id)
 
 
 @router.get("/me", response_model=UserOut)
-def get_current_user_profile(current_user: User = Depends(get_current_user)):
-    return UserOut.model_validate(current_user)
+def get_current_user_profile(
+    db: Session = Depends(get_db),
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+):
+    ctx = resolve_context(db, auth.credentials if auth else None)
+    if ctx is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Could not validate credentials or token expired",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return user_out(db, ctx)

@@ -18,32 +18,45 @@ existence isn't leaked across tenants.
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from fastapi import Depends, HTTPException, status
-from sqlalchemy import and_, exists, or_
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import and_, exists, literal, or_
 from sqlalchemy.orm import Query, Session
 
-from app.core.security import ROLE_PERMISSIONS, get_current_user, get_current_user_optional
-from app.models.db_models import Application, CandidateProfile, Job, User
+from app.core.database import get_db
+from app.core.security import ROLE_PERMISSIONS, decode_access_token, security_bearer
+from app.models.db_models import Application, CandidateProfile, Job, Membership, Organization, User
+from app.services.membership_service import ACTIVE, DELETED_STATUS, ORG_ADMIN_ROLES, ORG_ROLES, PLATFORM_ROLES
 
 SUPER_ADMIN = "SUPER_ADMIN"
 CANDIDATE = "CANDIDATE"
-ORG_ROLES = {"ORG_ADMIN", "EMPLOYER_ADMIN", "RECRUITER", "HIRING_MANAGER", "INTERVIEWER", "ANALYST"}
-ORG_ADMIN_ROLES = {"ORG_ADMIN", "EMPLOYER_ADMIN"}
 
 PUBLIC_JOB_STATUS = "Active"
+ORG_HEADER = "X-Org-Id"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 @dataclass
 class TenantContext:
+    """Who is calling and in which organization.
+
+    For organization staff, the organization and role come from the ACTIVE membership
+    (the token's active_org_id), never from the users row. Platform accounts
+    (SUPER_ADMIN, CANDIDATE) have no membership and keep their platform role.
+    """
     user: User
+    membership: Optional[Membership] = None
+    organization: Optional[Organization] = None
 
     @property
     def role(self) -> str:
-        return self.user.role
+        if self.user.role in PLATFORM_ROLES:  # membership-guard: ok (platform role)
+            return self.user.role  # membership-guard: ok (platform role)
+        return self.membership.role if self.membership else ""
 
     @property
     def org_id(self) -> Optional[str]:
-        return self.user.organization_id
+        return self.membership.organization_id if self.membership else None
 
     @property
     def is_super_admin(self) -> bool:
@@ -62,11 +75,18 @@ class TenantContext:
         return self.role in ORG_ADMIN_ROLES and self.org_id is not None
 
     @property
+    def is_parent_admin(self) -> bool:
+        """Admin of a parent organization (may manage clients that allow it)."""
+        return self.is_org_admin and self.organization is not None and self.organization.org_type == "parent"
+
+    @property
     def candidate_id(self) -> Optional[str]:
         profile = self.user.candidate_profile
         return profile.id if profile else None
 
     def has(self, permission: str) -> bool:
+        if permission == "org:manage_clients":
+            return self.is_super_admin or (self.is_parent_admin and permission in ROLE_PERMISSIONS.get(self.role, set()))
         return permission in ROLE_PERMISSIONS.get(self.role, set())
 
     def require(self, permission: str) -> None:
@@ -75,19 +95,72 @@ class TenantContext:
 
 
 # ---------------------------------------------------------------------------
-# FastAPI dependencies
+# Resolving the caller (one joined query: user + active membership + organization)
 # ---------------------------------------------------------------------------
-def get_tenant(user: User = Depends(get_current_user)) -> TenantContext:
-    org = user.organization
-    if org is not None and not org.is_active and user.role != SUPER_ADMIN:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is suspended")
-    return TenantContext(user=user)
+def _credentials_error() -> HTTPException:
+    return HTTPException(status.HTTP_401_UNAUTHORIZED, "Could not validate credentials or token expired",
+                         headers={"WWW-Authenticate": "Bearer"})
 
 
-def get_tenant_optional(user: Optional[User] = Depends(get_current_user_optional)) -> Optional[TenantContext]:
-    if user is None or not user.is_active:
+def resolve_context(db: Session, token: Optional[str]) -> Optional[TenantContext]:
+    """TenantContext for a bearer token, or None if the token is missing/invalid/the user inactive.
+
+    The organization is the token's active_org_id; tokens without one (the classic
+    workspace, tokens issued before memberships) use the user's default organization.
+    The membership is re-checked on every request, so revoking it takes effect at once.
+    Raises 403 when the token names an organization the user no longer belongs to.
+    """
+    payload = decode_access_token(token) if token else None
+    if not payload or "sub" not in payload:
         return None
-    return get_tenant(user)
+    claimed_org = payload.get("active_org_id")
+    target_org = literal(claimed_org) if claimed_org else User.organization_id  # membership-guard: ok (default-org fallback)
+    row = (
+        db.query(User, Membership, Organization)
+        .outerjoin(Membership, and_(Membership.user_id == User.id, Membership.organization_id == target_org,
+                                    Membership.status == ACTIVE))
+        .outerjoin(Organization, Organization.id == Membership.organization_id)
+        .filter(User.id == payload["sub"])
+        .first()
+    )
+    if row is None or not row[0].is_active:
+        return None
+    user, membership, org = row
+    if claimed_org and membership is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "You are no longer a member of this organization. Switch to another organization.")
+    return TenantContext(user=user, membership=membership, organization=org)
+
+
+def _check_org_header(request: Request, ctx: TenantContext) -> None:
+    """A tab that still shows another organization must not write into the new one."""
+    header = request.headers.get(ORG_HEADER)
+    if header and request.method not in SAFE_METHODS and header != (ctx.org_id or ""):
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "You switched organizations in another tab. Reload the page and try again.")
+
+
+def get_tenant(request: Request, auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+               db: Session = Depends(get_db)) -> TenantContext:
+    ctx = resolve_context(db, auth.credentials if auth else None)
+    if ctx is None:
+        raise _credentials_error()
+    if ctx.organization is not None and (not ctx.organization.is_active or ctx.organization.status == DELETED_STATUS)             and not ctx.is_super_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is suspended")
+    _check_org_header(request, ctx)
+    return ctx
+
+
+def get_tenant_optional(request: Request, auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+                        db: Session = Depends(get_db)) -> Optional[TenantContext]:
+    if not auth:
+        return None
+    try:
+        return get_tenant(request, auth, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
 
 
 def require_permission(*permissions: str) -> Callable[..., TenantContext]:
@@ -251,4 +324,4 @@ def can_manage_user(ctx: TenantContext, target: User) -> bool:
         return False  # nobody suspends or re-roles themselves
     if ctx.is_super_admin:
         return True
-    return ctx.is_org_admin and target.organization_id == ctx.org_id and target.role != SUPER_ADMIN
+    return ctx.is_org_admin and any(m.organization_id == ctx.org_id for m in target.memberships)

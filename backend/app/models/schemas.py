@@ -31,8 +31,13 @@ class ResetPasswordRequest(BaseModel):
 
 class AcceptInvitationRequest(BaseModel):
     token: str
-    full_name: str = Field(min_length=1, max_length=128)
-    password: str
+    # Required for new accounts; omitted when an existing (signed-in) account accepts
+    full_name: Optional[str] = Field(None, min_length=1, max_length=128)
+    password: Optional[str] = None
+
+
+class SwitchOrgRequest(BaseModel):
+    organization_id: str = Field(min_length=1, max_length=64)
 
 class InvitationCreate(BaseModel):
     email: EmailStr
@@ -82,6 +87,9 @@ class UserOut(BaseModel):
     is_active: bool = True
     email_verified: bool = True
     created_at: Optional[datetime] = None
+    # Set on /auth/me and session responses: the organization this session works in
+    active_organization_id: Optional[str] = None
+    memberships_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -106,9 +114,35 @@ class OrganizationOut(BaseModel):
     max_active_jobs: int = 50
     monthly_ai_credits: int = 5000
     monthly_ai_credits_used: int = 0
+    org_type: str = "standalone"
+    parent_id: Optional[str] = None
+    allow_parent_access: bool = False
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class ClientOrganizationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    domain: str = Field(min_length=3, max_length=128)
+    industry: str = Field("Software & AI", max_length=64)
+
+class MembershipOut(BaseModel):
+    id: str
+    user_id: str
+    email: str
+    full_name: str
+    organization_id: str
+    role: str
+    status: str
+    created_at: Optional[datetime] = None
+
+class MembershipCreate(BaseModel):
+    email: EmailStr
+    role: str = Field(max_length=32)
+
+class MembershipUpdate(BaseModel):
+    role: Optional[str] = Field(None, max_length=32)
+    status: Optional[str] = Field(None, max_length=16)
 
 class OrganizationCreate(BaseModel):
     name: str
@@ -128,6 +162,8 @@ class OrganizationUpdate(BaseModel):
     max_recruiter_seats: Optional[int] = None
     max_active_jobs: Optional[int] = None
     monthly_ai_credits: Optional[int] = None
+    org_type: Optional[str] = None             # standalone | parent (platform admins only)
+    allow_parent_access: Optional[bool] = None  # client organizations: may the parent's admins manage members?
 
 class AdminUserUpdate(BaseModel):
     full_name: Optional[str] = None

@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Set
+from typing import Optional
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -44,6 +44,7 @@ ROLE_PERMISSIONS = {
         "profile:manage_own"
     },
     "ORG_ADMIN": {
+        "org:manage_clients",
         "org:manage_settings",
         "org:manage_users",
         "jobs:create_edit",
@@ -57,6 +58,7 @@ ROLE_PERMISSIONS = {
         "profile:manage_own"
     },
     "EMPLOYER_ADMIN": { # Alias for ORG_ADMIN backward compatibility
+        "org:manage_clients",
         "org:manage_settings",
         "org:manage_users",
         "jobs:create_edit",
@@ -198,42 +200,3 @@ def get_current_user(
     if not user or not user.is_active:
         raise credentials_exception
     return user
-
-def require_roles(allowed_roles: List[str]):
-    def role_checker(current_user = Depends(get_current_user)):
-        # Normalize EMPLOYER_ADMIN and ORG_ADMIN
-        user_role = current_user.role
-        if user_role in allowed_roles:
-            return current_user
-        if "ORG_ADMIN" in allowed_roles and user_role == "EMPLOYER_ADMIN":
-            return current_user
-        if "EMPLOYER_ADMIN" in allowed_roles and user_role == "ORG_ADMIN":
-            return current_user
-            
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied. Requires one of roles: {', '.join(allowed_roles)}"
-        )
-    return role_checker
-
-def require_permissions(required_perms: List[str]):
-    def permission_checker(current_user = Depends(get_current_user)):
-        user_perms = ROLE_PERMISSIONS.get(current_user.role, set())
-        for perm in required_perms:
-            if perm not in user_perms:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Access denied. Missing permission: {perm}"
-                )
-        return current_user
-    return permission_checker
-
-def enforce_tenant_access(current_user, target_org_id: Optional[str]) -> bool:
-    """Enforces that a user can only access resources within their own organization unless they are a Super Admin."""
-    if not current_user:
-        return False
-    if current_user.role == "SUPER_ADMIN":
-        return True
-    if not target_org_id:
-        return False
-    return current_user.organization_id == target_org_id

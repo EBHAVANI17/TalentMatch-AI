@@ -6,6 +6,7 @@ import { roleLabel } from "@/lib/auth/roles";
 import { applyTheme, getInitialTheme, type Theme } from "@/lib/theme";
 import { CopilotLauncher } from "@/features/copilot/CopilotPanel";
 import { NotificationsMenu } from "./NotificationsMenu";
+import { OrgSwitcher } from "./OrgSwitcher";
 
 function initials(name: string) {
   return name
@@ -129,6 +130,7 @@ export function Header({ leading }: { leading?: ReactNode }) {
     <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2">{leading}<GlobalSearch /></div>
       <div className="flex items-center gap-1">
+        <OrgSwitcher />
         <CopilotLauncher />
         <NotificationsMenu />
         <ThemeToggle />

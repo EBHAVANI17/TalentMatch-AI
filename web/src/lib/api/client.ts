@@ -16,6 +16,13 @@ export class ApiError extends Error {
 
 type Query = Record<string, string | number | boolean | undefined | null>;
 
+// The organization this tab is showing. Sent as X-Org-Id so the API refuses writes (409) after
+// another tab switched the shared session to a different organization.
+let activeOrganizationId: string | null = null;
+export function setActiveOrganization(id: string | null | undefined): void {
+  activeOrganizationId = id ?? null;
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
@@ -84,6 +91,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   if (options.body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   const token = options.auth === false ? null : getAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && activeOrganizationId) headers["X-Org-Id"] = activeOrganizationId;
 
   return fetch(buildUrl(path, options.query), {
     method: options.method ?? "GET",

@@ -22,6 +22,7 @@ from app.api.search import router as search_router
 from app.api.ai_features import router as ai_features_router
 from app.api.ai_admin import router as ai_admin_router
 from app.api.copilot import router as copilot_router
+from app.api.me import router as me_router
 from app.core.tenancy import TenantContext, get_tenant
 from app.api.recommendations import jobs_for_candidate
 
@@ -49,6 +50,7 @@ router.include_router(search_router)
 router.include_router(ai_features_router)
 router.include_router(ai_admin_router)
 router.include_router(copilot_router)
+router.include_router(me_router)
 
 # Legacy Backward-Compatibility Endpoint
 @router.get("/ai/recommend-jobs/{userId}", tags=["Legacy"])

@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.adapters.email import EmailMessage, get_email_sender
 from app.core.config import settings
 from app.core.security import hash_password
-from app.models.db_models import Invitation, Organization, User, UserToken
+from app.models.db_models import Invitation, Membership, Organization, User, UserToken
+from app.services import membership_service
 
 REFRESH = "refresh"
 EMAIL_VERIFY = "email_verify"
@@ -46,7 +47,7 @@ def validate_password(password: str) -> None:
 # ---------------------------------------------------------------------------
 # Generic single-use tokens
 # ---------------------------------------------------------------------------
-def issue_token(db: Session, user: User, purpose: str, ttl: timedelta) -> str:
+def issue_token(db: Session, user: User, purpose: str, ttl: timedelta, organization_id: Optional[str] = None) -> str:
     raw, digest = _new_token()
     db.add(UserToken(
         id=f"tok_{uuid.uuid4().hex[:12]}",
@@ -54,6 +55,7 @@ def issue_token(db: Session, user: User, purpose: str, ttl: timedelta) -> str:
         purpose=purpose,
         token_hash=digest,
         expires_at=datetime.utcnow() + ttl,
+        organization_id=organization_id,
     ))
     db.commit()
     return raw
@@ -61,6 +63,11 @@ def issue_token(db: Session, user: User, purpose: str, ttl: timedelta) -> str:
 
 def consume_token(db: Session, raw: str, purpose: str) -> Optional[User]:
     """Mark a token used and return its user, or None if it is unknown/expired/used."""
+    record = consume_token_record(db, raw, purpose)
+    return db.get(User, record.user_id) if record else None
+
+
+def consume_token_record(db: Session, raw: str, purpose: str) -> Optional[UserToken]:
     record = db.query(UserToken).filter(UserToken.token_hash == _hash(raw), UserToken.purpose == purpose).first()
     if record is None:
         return None
@@ -73,7 +80,7 @@ def consume_token(db: Session, raw: str, purpose: str) -> Optional[User]:
         return None
     record.used_at = datetime.utcnow()
     db.commit()
-    return db.get(User, record.user_id)
+    return record
 
 
 def revoke_tokens(db: Session, user_id: str, purpose: str) -> None:
@@ -86,15 +93,18 @@ def revoke_tokens(db: Session, user_id: str, purpose: str) -> None:
 # ---------------------------------------------------------------------------
 # Refresh tokens (rotating)
 # ---------------------------------------------------------------------------
-def issue_refresh_token(db: Session, user: User) -> str:
-    return issue_token(db, user, REFRESH, timedelta(days=settings.refresh_token_expire_days))
+def issue_refresh_token(db: Session, user: User, organization_id: Optional[str] = None) -> str:
+    return issue_token(db, user, REFRESH, timedelta(days=settings.refresh_token_expire_days), organization_id)
 
 
-def rotate_refresh_token(db: Session, raw: str) -> Tuple[User, str]:
-    user = consume_token(db, raw, REFRESH)
+def rotate_refresh_token(db: Session, raw: str) -> Tuple[User, Optional[str]]:
+    """Consumes a refresh token. Returns the user and the organization the session was working in;
+    the caller issues the new pair (api/auth.issue_session)."""
+    record = consume_token_record(db, raw, REFRESH)
+    user = db.get(User, record.user_id) if record else None
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token is invalid or expired")
-    return user, issue_refresh_token(db, user)
+    return user, record.organization_id
 
 
 # ---------------------------------------------------------------------------
@@ -157,19 +167,17 @@ def reset_password(db: Session, raw: str, new_password: str) -> User:
 # Team invitations
 # ---------------------------------------------------------------------------
 def seats_in_use(db: Session, org_id: str) -> int:
-    members = db.query(User).filter(User.organization_id == org_id, User.is_active.is_(True)).count()
-    pending = db.query(Invitation).filter(
-        Invitation.organization_id == org_id,
-        Invitation.status == "pending",
-        Invitation.expires_at > datetime.utcnow(),
-    ).count()
-    return members + pending
+    return membership_service.seats_in_use(db, org_id)
 
 
 def create_invitation(db: Session, org: Organization, email: str, role: str, invited_by: User) -> Invitation:
     email = email.lower()
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(status.HTTP_409_CONFLICT, "A user with this email already exists")
+    existing = db.query(User).filter(User.email == email).first()
+    if existing is not None:
+        if existing.role in membership_service.PLATFORM_ROLES:  # membership-guard: ok (platform role)
+            raise HTTPException(status.HTTP_409_CONFLICT, "Platform admin and candidate accounts can't join an organization")
+        if membership_service.active_membership(db, existing.id, org.id):
+            raise HTTPException(status.HTTP_409_CONFLICT, "This person is already a member of the organization")
     if seats_in_use(db, org.id) >= org.max_recruiter_seats:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
@@ -203,29 +211,51 @@ def create_invitation(db: Session, org: Organization, email: str, role: str, inv
     return invitation
 
 
-def accept_invitation(db: Session, raw: str, full_name: str, password: str) -> User:
-    validate_password(password)
+def _pending_invitation(db: Session, raw: str) -> Invitation:
     invitation = db.query(Invitation).filter(Invitation.token_hash == _hash(raw)).first()
     if invitation is None or invitation.status != "pending" or invitation.expires_at < datetime.utcnow():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invitation is invalid or expired")
-    if not invitation.organization or not invitation.organization.is_active:
+    if not membership_service.is_org_usable(invitation.organization):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is not active")
-    if db.query(User).filter(User.email == invitation.email).first():
-        raise HTTPException(status.HTTP_409_CONFLICT, "A user with this email already exists")
+    return invitation
 
-    user = User(
-        id=f"usr_{uuid.uuid4().hex[:10]}",
-        email=invitation.email,
-        hashed_password=hash_password(password),
-        full_name=full_name,
-        role=invitation.role,
-        organization_id=invitation.organization_id,
+
+def invited_account_exists(db: Session, raw: str) -> bool:
+    """Whether a valid, pending invitation was sent to an existing account (400 if the invitation isn't valid)."""
+    invitation = _pending_invitation(db, raw)
+    return db.query(User).filter(User.email == invitation.email).first() is not None
+
+
+def accept_invitation(db: Session, raw: str, full_name: str, password: str) -> User:
+    """New account: create it with its first membership. Single use."""
+    validate_password(password)
+    invitation = _pending_invitation(db, raw)
+    if db.query(User).filter(User.email == invitation.email).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email exists. Sign in to accept the invitation.")
+    user = membership_service.create_org_user(
+        db, org=invitation.organization, role=invitation.role, check_seats=False,  # the invitation held the seat
+        email=invitation.email, hashed_password=hash_password(password), full_name=full_name,
         email_verified=True,  # the invite link was delivered to this address
         is_active=True,
     )
-    db.add(user)
     invitation.status = "accepted"
     invitation.accepted_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
     return user
+
+
+def accept_invitation_as(db: Session, raw: str, user: User) -> Membership:
+    """Existing account: only the invited, verified email can accept. Single use."""
+    invitation = _pending_invitation(db, raw)
+    if user.email.lower() != invitation.email.lower():
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This invitation was sent to a different email address")
+    if not user.email_verified:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Verify your email address before accepting invitations")
+    membership = membership_service.add_member(
+        db, org=invitation.organization, user=user, role=invitation.role, actor=user, check_seats=False,
+    )
+    invitation.status = "accepted"
+    invitation.accepted_at = datetime.utcnow()
+    db.commit()
+    return membership

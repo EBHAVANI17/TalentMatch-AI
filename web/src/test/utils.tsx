@@ -53,6 +53,8 @@ export function makeUser(overrides: Partial<User> = {}): User {
     is_active: true,
     email_verified: true,
     created_at: null,
+    active_organization_id: overrides.organization_id === undefined ? "org_anthropic" : overrides.organization_id,
+    memberships_count: 1,
     ...overrides,
   };
 }

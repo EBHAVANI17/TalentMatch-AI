@@ -5,6 +5,7 @@ type Schemas = components["schemas"];
 
 export type User = Schemas["UserOut"];
 export type TokenResponse = Schemas["TokenResponse"];
+export type MyOrganization = Schemas["MyOrganization"];
 export type Organization = Schemas["OrganizationOut"];
 export type Invitation = Schemas["InvitationOut"];
 export type PublicConfig = Schemas["PublicConfig"];
