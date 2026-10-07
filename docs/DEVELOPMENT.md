@@ -226,3 +226,23 @@ prompts, rule-based fallbacks), routers `api/ai_features.py` (`/api/v1/ai/...`) 
   fallback. Limits: `AI_USER_DAILY_LIMIT` per user and the organization's monthly AI credits.
 - **Tests** never call real providers: `tests/conftest.py` and `backend/scripts/e2e_server.py` blank the
   keys, and provider behaviour is tested with mocked HTTP.
+
+## Recruiter copilot
+
+Code: `backend/app/copilot/` (tools, references, rules fallback, service), router `api/copilot.py`
+(`/api/v1/copilot/...`), web `web/src/features/copilot/` (header panel, Ctrl/Cmd+J, and `/copilot` with history).
+
+- **Flow per question**: names of candidates the user can see are swapped for references (`[C1]`), then
+  emails/phones/links are redacted; a planner call picks up to three read-only tools; the tools run inside
+  the user's organization; an answer call writes a reply citing only the records found. Each question makes
+  two governed AI calls (`copilot_plan`, `copilot_answer`), so it counts twice toward `AI_USER_DAILY_LIMIT`.
+- **Grounding**: records go to the model in a fenced data block; references the model invents are removed
+  before saving. Without AI keys, keyword routing and templated answers are used (`copilot/rules.py`).
+- **Tools** (`copilot/tools.py`): candidate search, top matches for a job, jobs, pipeline summary, candidate
+  overview, upcoming interviews. To add one: write a scoped function that adds `Record`s (facts only, no
+  names or contact details), register it in `TOOLS`, describe it in `TOOL_GUIDE`, and add a rules route
+  and a tenancy test.
+- **Storage**: conversations are private to their owner; messages are stored in reference form and
+  encrypted. Labels and links are resolved when read, through the tenancy rules.
+- **Access**: recruiters, hiring managers and org admins (`candidates:search_pool`). Rate limit:
+  `RATE_LIMIT_COPILOT`. Read-only for now; actions with approval come with agents (Phase 7).
