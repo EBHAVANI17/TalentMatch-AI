@@ -117,6 +117,7 @@ class OrganizationOut(BaseModel):
     org_type: str = "standalone"
     parent_id: Optional[str] = None
     allow_parent_access: bool = False
+    max_client_orgs: int = 10
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -163,6 +164,7 @@ class OrganizationUpdate(BaseModel):
     max_active_jobs: Optional[int] = None
     monthly_ai_credits: Optional[int] = None
     org_type: Optional[str] = None             # standalone | parent (platform admins only)
+    max_client_orgs: Optional[int] = Field(None, ge=0, le=10000)  # platform admins only
     allow_parent_access: Optional[bool] = None  # client organizations: may the parent's admins manage members?
 
 class AdminUserUpdate(BaseModel):

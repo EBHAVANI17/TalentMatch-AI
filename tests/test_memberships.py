@@ -383,3 +383,27 @@ def test_membership_backfill_is_idempotent():
     with engine.begin() as conn:
         module.backfill_memberships(conn)
         assert module.backfill_memberships(conn) == 0
+
+
+def test_client_creation_counts_against_the_parents_plan(client):
+    parent = _org("parent", max_client_orgs=2)
+    p = _login(client, _staff(parent, role="ORG_ADMIN")["email"])
+    url = f"/api/v1/organizations/{parent}/clients"
+    new = lambda: {"name": "C", "domain": f"{uuid.uuid4().hex[:8]}.example.com"}  # noqa: E731
+    assert client.post(url, headers=_h(p), json=new()).status_code == 201
+    second = client.post(url, headers=_h(p), json=new())
+    assert second.status_code == 201
+    full = client.post(url, headers=_h(p), json=new())
+    assert full.status_code == 409 and "limit reached (2)" in full.json()["detail"]
+    # A deleted client frees its slot; parents can't raise their own limit
+    assert client.patch(f"/api/v1/organizations/{parent}", headers=_h(p), json={"max_client_orgs": 50}).status_code == 403
+    with SessionLocal() as db:
+        db.get(Organization, second.json()["id"]).status = "deleted"
+        db.commit()
+    assert client.post(url, headers=_h(p), json=new()).status_code == 201
+
+
+def test_demo_data_has_a_person_in_two_organizations(client):
+    session = _switch(client, client.post("/api/v1/auth/login", json={"email": "priya@talentmatch.ai", "password": "priya123"}).json(),
+                      "org_stripe")
+    assert session.status_code == 200 and session.json()["user"]["role"] == "HIRING_MANAGER"

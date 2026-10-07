@@ -28,7 +28,7 @@ test.describe("Phase 5 recruiter copilot", () => {
     await signInAs(page, /Recruiter \(Anthropic\)/);
     await page.goto("/app/copilot");
     const question = `Show my hiring pipeline`;
-    await page.getByRole("button", { name: question }).click();
+    await page.getByRole("button", { name: question, exact: true }).click();
     await expect(page.getByText(/Pipeline for your organization/)).toBeVisible();
     await expect(page).toHaveURL(/\?c=conv_/);
 

@@ -12,6 +12,7 @@ const DEMO_PERSONAS = [
   { label: "Candidate", detail: "Aarav Sharma", email: "aarav@stanford.edu", password: "aarav123", icon: UserRound },
   { label: "Recruiter", detail: "Anthropic", email: "recruiter@anthropic.com", password: "anthropic123", icon: Building2 },
   { label: "Recruiter", detail: "Stripe", email: "recruiter@stripe.com", password: "stripe123", icon: Building2 },
+  { label: "Two organizations", detail: "Anthropic + Stripe", email: "priya@talentmatch.ai", password: "priya123", icon: Building2 },
   { label: "Platform admin", detail: "Super admin", email: "admin@talentmatch.ai", password: "admin123", icon: Shield },
 ];
 

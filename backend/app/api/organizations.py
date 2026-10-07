@@ -15,7 +15,7 @@ from app.services.audit_service import log_audit_event
 router = APIRouter(prefix="/organizations", tags=["Organizations (Tenants)"])
 
 PLATFORM_CONTROLLED_FIELDS = {"plan_tier", "status", "is_active", "domain", "max_recruiter_seats", "max_active_jobs",
-                              "monthly_ai_credits", "org_type"}
+                              "monthly_ai_credits", "org_type", "max_client_orgs"}
 
 @router.get("", response_model=List[OrganizationOut])
 def get_organizations(
@@ -150,6 +150,7 @@ def update_organization(
         setattr(org, "is_active", payload.status == "Active")
     if payload.max_recruiter_seats is not None: setattr(org, "max_recruiter_seats", payload.max_recruiter_seats)
     if payload.max_active_jobs is not None: setattr(org, "max_active_jobs", payload.max_active_jobs)
+    if payload.max_client_orgs is not None: setattr(org, "max_client_orgs", payload.max_client_orgs)
     if payload.monthly_ai_credits is not None: setattr(org, "monthly_ai_credits", payload.monthly_ai_credits)
 
     db.commit()

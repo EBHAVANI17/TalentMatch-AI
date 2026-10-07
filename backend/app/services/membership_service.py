@@ -282,6 +282,12 @@ def assign_platform_role(db: Session, user: User, role: str, actor: Optional[Use
 # ---------------------------------------------------------------------------
 def create_client_org(db: Session, *, parent: Organization, actor: User, **fields) -> Organization:
     validate_parent(parent)
+    existing = db.query(Organization).filter(Organization.parent_id == parent.id,
+                                             Organization.status != DELETED_STATUS).count()
+    limit = parent.max_client_orgs if parent.max_client_orgs is not None else 10
+    if existing >= limit:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"Client organization limit reached ({limit}) for this plan. Upgrade the plan or remove a client.")
     org = Organization(
         id=f"org_{uuid.uuid4().hex[:8]}", org_type="client", parent_id=parent.id, allow_parent_access=True,
         status="Active", is_active=True, **fields,

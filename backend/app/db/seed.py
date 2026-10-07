@@ -804,12 +804,34 @@ def seed_demo_data():
     finally:
         db.close()
 
+MULTI_ORG_EMAIL = "priya@talentmatch.ai"
+
+
+def _seed_multi_org_user(db):
+    """A demo recruiter who works for two organizations with different roles (organization switcher)."""
+    from app.services import membership_service
+
+    if db.query(User).filter(User.email == MULTI_ORG_EMAIL).first():
+        return
+    anthropic, stripe = db.get(Organization, "org_anthropic"), db.get(Organization, "org_stripe")
+    if anthropic is None or stripe is None:
+        return
+    user = membership_service.create_org_user(
+        db, org=anthropic, role="RECRUITER", check_seats=False,
+        email=MULTI_ORG_EMAIL, hashed_password=hash_password("priya123"), full_name="Priya Raman",
+        status="Active", is_active=True, email_verified=True,
+    )
+    membership_service.add_member(db, org=stripe, user=user, role="HIRING_MANAGER", actor=None, check_seats=False)
+    db.commit()
+
+
 def _finalize_demo_data(db):
     """Fill fields the seed lists above don't set: memberships, normalized skills, tenant on applications, publish dates."""
     from app.services.membership_service import ensure_memberships_from_mirror
     from app.services.skills_service import sync_all_skill_links
 
     ensure_memberships_from_mirror(db)
+    _seed_multi_org_user(db)
 
     from app.services.pipeline_service import STAGE_ALIASES
 

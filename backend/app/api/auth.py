@@ -197,6 +197,7 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
         max_recruiter_seats=plan.max_recruiter_seats if plan else 1,
         max_active_jobs=plan.max_active_jobs if plan else 2,
         monthly_ai_credits=plan.monthly_ai_credits if plan else 200,
+        max_client_orgs=plan.max_client_orgs if plan and plan.max_client_orgs is not None else 10,
         logo_icon="briefcase",
         website=f"https://{payload.company_domain}"
     )

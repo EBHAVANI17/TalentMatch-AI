@@ -53,6 +53,8 @@ class Organization(Base):
     max_active_jobs = Column(Integer, default=50)
     monthly_ai_credits = Column(Integer, default=5000)
     monthly_ai_credits_used = Column(Integer, default=0)
+    # Parent organizations: how many client organizations they may create
+    max_client_orgs = Column(Integer, nullable=False, default=10, server_default="10")
     # Organization-specific weights for the matching engine (JSON object); empty = platform defaults
     matching_weights_json = Column(Text, default="")
 
@@ -488,6 +490,7 @@ class Plan(Base):
     max_recruiter_seats = Column(Integer, default=3)
     max_active_jobs = Column(Integer, default=10)
     monthly_ai_credits = Column(Integer, default=1000)
+    max_client_orgs = Column(Integer, nullable=False, default=10, server_default="10")
     allow_autonomous_sourcing = Column(Boolean, default=True)
     allow_custom_roadmaps = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
