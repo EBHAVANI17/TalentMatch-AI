@@ -74,7 +74,7 @@ def reset_cipher() -> None:
 def encrypt_value(plain: Optional[str]) -> Optional[str]:
     if plain is None:
         return None
-    text = str(plain)
+    text = plain
     if not text or text.startswith(ENC_PREFIX):
         return text
     return ENC_PREFIX + get_cipher().encrypt(text.encode("utf-8")).decode("ascii")
@@ -83,7 +83,7 @@ def encrypt_value(plain: Optional[str]) -> Optional[str]:
 def decrypt_value(stored: Optional[str]) -> Optional[str]:
     if stored is None:
         return None
-    text = str(stored)
+    text = stored
     if not text.startswith(ENC_PREFIX):
         return text  # legacy plaintext
     try:
@@ -97,9 +97,9 @@ def rotate_value(stored: Optional[str]) -> Optional[str]:
     """Re-encrypt with the newest key (and encrypt legacy plaintext)."""
     if stored is None or stored == "":
         return stored
-    if not str(stored).startswith(ENC_PREFIX):
+    if not stored.startswith(ENC_PREFIX):
         return encrypt_value(stored)
-    token = str(stored)[len(ENC_PREFIX):].encode("ascii")
+    token = stored[len(ENC_PREFIX):].encode("ascii")
     return ENC_PREFIX + get_cipher().rotate(token).decode("ascii")
 
 

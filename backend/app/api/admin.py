@@ -108,21 +108,21 @@ def update_organization_admin(
         existing = db.query(Organization).filter(Organization.domain == payload.domain, Organization.id != org_id).first()
         if existing:
             raise HTTPException(status_code=400, detail="Domain already taken by another organization")
-        org.domain = payload.domain
+        setattr(org, "domain", payload.domain)
 
-    if payload.name is not None: org.name = payload.name
-    if payload.industry is not None: org.industry = payload.industry
-    if payload.plan_tier is not None: org.plan_tier = payload.plan_tier
-    if payload.max_recruiter_seats is not None: org.max_recruiter_seats = payload.max_recruiter_seats
-    if payload.max_active_jobs is not None: org.max_active_jobs = payload.max_active_jobs
-    if payload.monthly_ai_credits is not None: org.monthly_ai_credits = payload.monthly_ai_credits
+    if payload.name is not None: setattr(org, "name", payload.name)
+    if payload.industry is not None: setattr(org, "industry", payload.industry)
+    if payload.plan_tier is not None: setattr(org, "plan_tier", payload.plan_tier)
+    if payload.max_recruiter_seats is not None: setattr(org, "max_recruiter_seats", payload.max_recruiter_seats)
+    if payload.max_active_jobs is not None: setattr(org, "max_active_jobs", payload.max_active_jobs)
+    if payload.monthly_ai_credits is not None: setattr(org, "monthly_ai_credits", payload.monthly_ai_credits)
     
     if payload.is_active is not None:
-        org.is_active = payload.is_active
-        org.status = "Active" if payload.is_active else "Suspended"
+        setattr(org, "is_active", payload.is_active)
+        setattr(org, "status", "Active" if payload.is_active else "Suspended")
     elif payload.status is not None:
-        org.status = payload.status
-        org.is_active = (payload.status == "Active")
+        setattr(org, "status", payload.status)
+        setattr(org, "is_active", payload.status == "Active")
 
     db.commit()
     db.refresh(org)
@@ -164,8 +164,8 @@ def toggle_organization_status_admin(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     new_active = not org.is_active
-    org.is_active = new_active
-    org.status = "Active" if new_active else "Suspended"
+    setattr(org, "is_active", new_active)
+    setattr(org, "status", "Active" if new_active else "Suspended")
 
     db.commit()
     db.refresh(org)
@@ -230,7 +230,7 @@ def update_user_admin(
         existing = db.query(User).filter(User.email == payload.email, User.id != user_id).first()
         if existing:
             raise HTTPException(status_code=400, detail="Email is already taken by another account")
-        user.email = payload.email
+        setattr(user, "email", payload.email)
 
     if payload.status is not None and payload.status not in ("Active", "Suspended"):
         raise HTTPException(status_code=400, detail="Status must be 'Active' or 'Suspended'")
@@ -245,17 +245,17 @@ def update_user_admin(
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
 
     if payload.full_name is not None:
-        user.full_name = payload.full_name
+        setattr(user, "full_name", payload.full_name)
     if payload.role is not None:
-        user.role = payload.role
+        setattr(user, "role", payload.role)
     if payload.organization_id is not None:
         if payload.organization_id in ("", "none", "None"):
-            user.organization_id = None
+            setattr(user, "organization_id", None)
         else:
             org = db.query(Organization).filter(Organization.id == payload.organization_id).first()
             if not org:
                 raise HTTPException(status_code=400, detail="Target organization does not exist")
-            user.organization_id = org.id
+            setattr(user, "organization_id", org.id)
 
     # Organization staff need an organization; platform admins and candidates have none.
     if payload.role is not None or payload.organization_id is not None:
@@ -265,8 +265,8 @@ def update_user_admin(
             raise HTTPException(status_code=400, detail=f"{user.role} accounts must belong to an organization")
 
     if wants_active is not None:
-        user.is_active = wants_active
-        user.status = "Active" if wants_active else "Suspended"
+        setattr(user, "is_active", wants_active)
+        setattr(user, "status", "Active" if wants_active else "Suspended")
         if not wants_active:
             revoke_tokens(db, user.id, REFRESH)  # end their sessions
 
@@ -309,8 +309,8 @@ def toggle_user_status_admin(
         raise HTTPException(status_code=400, detail="Super Admin cannot deactivate their own active account")
 
     new_active = not user.is_active
-    user.is_active = new_active
-    user.status = "Active" if new_active else "Suspended"
+    setattr(user, "is_active", new_active)
+    setattr(user, "status", "Active" if new_active else "Suspended")
     if not new_active:
         revoke_tokens(db, user.id, REFRESH)  # end their sessions
 
@@ -369,9 +369,9 @@ def add_taxonomy_skill(
 ):
     existing = db.query(SkillTaxonomy).filter(SkillTaxonomy.name == name).first()
     if existing:
-        existing.category = category
-        existing.demand_level = demand_level
-        existing.avg_salary_boost = avg_salary_boost
+        setattr(existing, "category", category)
+        setattr(existing, "demand_level", demand_level)
+        setattr(existing, "avg_salary_boost", avg_salary_boost)
         db.commit()
         db.refresh(existing)
         item = existing

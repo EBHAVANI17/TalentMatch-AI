@@ -291,9 +291,7 @@ class CandidateDetailOut(CandidateProfileOut):
     languages: List[LanguageItem] = []
     projects: List[ProjectItem] = []
 
-class CandidateProfileUpdate(BaseModel):
-    """Partial update. List fields (experience, education, ...) replace the whole list when sent."""
-    full_name: Optional[str] = Field(None, min_length=1, max_length=128)
+class CandidateProfileBaseFields(BaseModel):
     title: Optional[str] = Field(None, max_length=128)
     bio: Optional[str] = Field(None, max_length=5000)
     phone: Optional[str] = Field(None, max_length=32)
@@ -319,7 +317,11 @@ class CandidateProfileUpdate(BaseModel):
     languages: Optional[List[LanguageItem]] = Field(None, max_length=15)
     projects: Optional[List[ProjectItem]] = Field(None, max_length=30)
 
-class SourcedCandidateCreate(CandidateProfileUpdate):
+class CandidateProfileUpdate(CandidateProfileBaseFields):
+    """Partial update. List fields (experience, education, ...) replace the whole list when sent."""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=128)
+
+class SourcedCandidateCreate(CandidateProfileBaseFields):
     """A recruiter adds someone who isn't on the platform yet. Private to the recruiter's organization."""
     full_name: str = Field(..., min_length=1, max_length=128)
     email: EmailStr

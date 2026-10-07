@@ -117,19 +117,19 @@ def update_organization(
         existing_domain = db.query(Organization).filter(Organization.domain == payload.domain, Organization.id != org.id).first()
         if existing_domain:
             raise HTTPException(status_code=400, detail="Domain is already in use by another organization")
-        org.domain = payload.domain
-    if payload.name is not None: org.name = payload.name
-    if payload.industry is not None: org.industry = payload.industry
-    if payload.plan_tier is not None: org.plan_tier = payload.plan_tier
+        setattr(org, "domain", payload.domain)
+    if payload.name is not None: setattr(org, "name", payload.name)
+    if payload.industry is not None: setattr(org, "industry", payload.industry)
+    if payload.plan_tier is not None: setattr(org, "plan_tier", payload.plan_tier)
     if payload.is_active is not None:
-        org.is_active = payload.is_active
-        org.status = "Active" if payload.is_active else "Suspended"
+        setattr(org, "is_active", payload.is_active)
+        setattr(org, "status", "Active" if payload.is_active else "Suspended")
     if payload.status is not None:
-        org.status = payload.status
-        org.is_active = (payload.status == "Active")
-    if payload.max_recruiter_seats is not None: org.max_recruiter_seats = payload.max_recruiter_seats
-    if payload.max_active_jobs is not None: org.max_active_jobs = payload.max_active_jobs
-    if payload.monthly_ai_credits is not None: org.monthly_ai_credits = payload.monthly_ai_credits
+        setattr(org, "status", payload.status)
+        setattr(org, "is_active", payload.status == "Active")
+    if payload.max_recruiter_seats is not None: setattr(org, "max_recruiter_seats", payload.max_recruiter_seats)
+    if payload.max_active_jobs is not None: setattr(org, "max_active_jobs", payload.max_active_jobs)
+    if payload.monthly_ai_credits is not None: setattr(org, "monthly_ai_credits", payload.monthly_ai_credits)
 
     db.commit()
     db.refresh(org)
@@ -205,7 +205,7 @@ def revoke_invitation(
     if not invitation:
         raise not_found("Invitation")
     if invitation.status == "pending":
-        invitation.status = "revoked"
+        setattr(invitation, "status", "revoked")
         db.commit()
         db.refresh(invitation)
     return invitation
