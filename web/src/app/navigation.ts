@@ -1,6 +1,6 @@
-import { Briefcase, Home, LayoutDashboard, Sparkles, UserRound, Users, UsersRound, type LucideIcon } from "lucide-react";
+import { Bot, Briefcase, Home, LayoutDashboard, Sparkles, UserRound, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { User } from "@/lib/api/types";
-import { isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
+import { canUseCopilot, isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
 
 const hiringTeam = (u: User | null) => isOrgMember(u) || isSuperAdmin(u);
 
@@ -21,6 +21,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/jobs", label: "Jobs", icon: Briefcase, visible: hiringTeam },
   { to: "/talent-match", label: "Talent Match", icon: Sparkles, visible: hiringTeam },
   { to: "/candidates", label: "Candidates", icon: UsersRound, visible: hiringTeam },
+  { to: "/copilot", label: "Copilot", icon: Bot, visible: canUseCopilot },
   { to: "/jobs-for-you", label: "Jobs for you", icon: Sparkles, visible: isCandidate },
   { to: "/profile", label: "My profile", icon: UserRound, visible: isCandidate },
   { to: "/team", label: "Team", icon: Users, visible: (u) => isOrgAdmin(u) || isSuperAdmin(u) },

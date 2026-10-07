@@ -985,6 +985,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get All Organizations Admin */
+        get: operations["get_all_organizations_admin_api_v1_admin_organizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/organizations/{org_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Organization Admin */
+        patch: operations["update_organization_admin_api_v1_admin_organizations__org_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/organizations/{org_id}/toggle-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Organization Status Admin */
+        post: operations["toggle_organization_status_admin_api_v1_admin_organizations__org_id__toggle_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -996,6 +1047,74 @@ export interface paths {
         get: operations["get_all_users_admin_api_v1_admin_users_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update User Admin */
+        patch: operations["update_user_admin_api_v1_admin_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/toggle-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle User Status Admin */
+        post: operations["toggle_user_status_admin_api_v1_admin_users__user_id__toggle_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/encryption/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Encryption Diagnostics */
+        get: operations["get_encryption_diagnostics_api_v1_admin_encryption_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/encryption/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Encryption Engine */
+        post: operations["test_encryption_engine_api_v1_admin_encryption_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1443,6 +1562,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/copilot/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["ask_api_v1_copilot_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/copilot/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversations */
+        get: operations["conversations_api_v1_copilot_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/copilot/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversation */
+        get: operations["conversation_api_v1_copilot_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Conversation */
+        delete: operations["delete_conversation_api_v1_copilot_conversations__conversation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/recommend-jobs/{userId}": {
         parameters: {
             query?: never;
@@ -1572,6 +1743,21 @@ export interface components {
             /** Database Status */
             database_status: string;
         };
+        /** AdminUserUpdate */
+        AdminUserUpdate: {
+            /** Full Name */
+            full_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Organization Id */
+            organization_id?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
         /** AnalyticsOverview */
         AnalyticsOverview: {
             /** Total Candidates */
@@ -1589,17 +1775,23 @@ export interface components {
              * Top Demanded Skills
              * @default []
              */
-            top_demanded_skills: Record<string, never>[];
+            top_demanded_skills: {
+                [key: string]: unknown;
+            }[];
             /**
              * Department Distribution
              * @default []
              */
-            department_distribution: Record<string, never>[];
+            department_distribution: {
+                [key: string]: unknown;
+            }[];
             /**
              * Salary Trends
              * @default []
              */
-            salary_trends: Record<string, never>[];
+            salary_trends: {
+                [key: string]: unknown;
+            }[];
             /**
              * Recent Placements Count
              * @default 28
@@ -1678,7 +1870,9 @@ export interface components {
              */
             cover_note: string;
             /** Score Breakdown */
-            score_breakdown?: Record<string, never>;
+            score_breakdown?: {
+                [key: string]: unknown;
+            };
             /**
              * Applied Date
              * @default
@@ -1706,6 +1900,21 @@ export interface components {
              */
             reason: string | null;
         };
+        /** AskIn */
+        AskIn: {
+            /** Message */
+            message: string;
+            /** Conversation Id */
+            conversation_id?: string | null;
+            /** @default {} */
+            context: components["schemas"]["CopilotContext"];
+        };
+        /** AskOut */
+        AskOut: {
+            /** Conversation Id */
+            conversation_id: string;
+            message: components["schemas"]["MessageOut"];
+        };
         /** AuditLogOut */
         AuditLogOut: {
             /** Id */
@@ -1723,7 +1932,9 @@ export interface components {
             /** Entity Id */
             entity_id: string;
             /** Details */
-            details?: Record<string, never>;
+            details?: {
+                [key: string]: unknown;
+            };
             /** Ip Address */
             ip_address: string;
             /**
@@ -1819,7 +2030,9 @@ export interface components {
              */
             automated_stage_updated: string;
             /** Rubric Breakdown */
-            rubric_breakdown?: Record<string, never>;
+            rubric_breakdown?: {
+                [key: string]: unknown;
+            };
             /**
              * Screening Notes
              * @default
@@ -1885,10 +2098,7 @@ export interface components {
         };
         /** Body_parse_resume_api_v1_ai_resume_parse_post */
         Body_parse_resume_api_v1_ai_resume_parse_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /**
              * Candidate Id
@@ -1898,20 +2108,14 @@ export interface components {
         };
         /** Body_upload_and_process_resume_api_v1_resumes_upload_post */
         Body_upload_and_process_resume_api_v1_resumes_upload_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Candidate Id */
             candidate_id: string;
         };
         /** Body_upload_resume_api_v1_candidates_upload_resume_post */
         Body_upload_resume_api_v1_candidates_upload_resume_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Target Job Id */
             target_job_id?: string | null;
@@ -2294,8 +2498,6 @@ export interface components {
          * @description Partial update. List fields (experience, education, ...) replace the whole list when sent.
          */
         CandidateProfileUpdate: {
-            /** Full Name */
-            full_name?: string | null;
             /** Title */
             title?: string | null;
             /** Bio */
@@ -2344,6 +2546,8 @@ export interface components {
             languages?: components["schemas"]["LanguageItem"][] | null;
             /** Projects */
             projects?: components["schemas"]["ProjectItem"][] | null;
+            /** Full Name */
+            full_name?: string | null;
         };
         /** CertificationDraft */
         CertificationDraft: {
@@ -2388,6 +2592,21 @@ export interface components {
              */
             credential_url: string;
         };
+        /** Citation */
+        Citation: {
+            /** Ref */
+            ref: string;
+            /** Kind */
+            kind: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Url */
+            url: string;
+            /** Available */
+            available: boolean;
+        };
         /**
          * ContactInfo
          * @description Extracted locally with patterns; never sent to or produced by an AI model.
@@ -2428,6 +2647,33 @@ export interface components {
              * @default
              */
             portfolio_url: string;
+        };
+        /** ConversationOut */
+        ConversationOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+        };
+        /** ConversationSummary */
+        ConversationSummary: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** CopilotContext */
+        CopilotContext: {
+            /** Job Id */
+            job_id?: string | null;
+            /** Candidate Id */
+            candidate_id?: string | null;
         };
         /** DayCount */
         DayCount: {
@@ -2503,6 +2749,41 @@ export interface components {
              * @default
              */
             gpa: string;
+        };
+        /** EncryptionStatusOut */
+        EncryptionStatusOut: {
+            /** Status */
+            status: string;
+            /** Algorithm */
+            algorithm: string;
+            /** Key Derived */
+            key_derived: boolean;
+            /** Key Source */
+            key_source: string;
+            /** Keys Configured */
+            keys_configured: number;
+            /** Token Prefix */
+            token_prefix: string;
+            /** Protected Fields */
+            protected_fields: string[];
+            /** Self Test Passed */
+            self_test_passed: boolean;
+        };
+        /** EncryptionTestRequest */
+        EncryptionTestRequest: {
+            /** Text */
+            text: string;
+        };
+        /** EncryptionTestResponse */
+        EncryptionTestResponse: {
+            /** Original */
+            original: string;
+            /** Encrypted */
+            encrypted: string;
+            /** Decrypted */
+            decrypted: string;
+            /** Is Valid */
+            is_valid: boolean;
         };
         /** ExperienceDraft */
         ExperienceDraft: {
@@ -3264,7 +3545,9 @@ export interface components {
              * Detected Biases And Fixes
              * @default []
              */
-            detected_biases_and_fixes: Record<string, never>[];
+            detected_biases_and_fixes: {
+                [key: string]: unknown;
+            }[];
             /**
              * Identified Bias Flags
              * @default []
@@ -3429,7 +3712,9 @@ export interface components {
              * Four Week Plan
              * @default []
              */
-            four_week_plan: Record<string, never>[];
+            four_week_plan: {
+                [key: string]: unknown;
+            }[];
             /**
              * Executive Advice
              * @default
@@ -3557,6 +3842,25 @@ export interface components {
             /** Potential */
             potential: number;
         };
+        /** MessageOut */
+        MessageOut: {
+            /** Id */
+            id: string;
+            /** Role */
+            role: string;
+            /** Content */
+            content: string;
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+            /** Follow Ups */
+            follow_ups: string[];
+            /** Method */
+            method: string;
+            /** Notice */
+            notice: string;
+            /** Created At */
+            created_at: string | null;
+        };
         /** MessageResponse */
         MessageResponse: {
             /** Message */
@@ -3653,7 +3957,9 @@ export interface components {
              */
             exemplary_answer: string;
             /** Rubric */
-            rubric?: Record<string, never>;
+            rubric?: {
+                [key: string]: unknown;
+            };
         };
         /** NotificationOut */
         NotificationOut: {
@@ -3764,12 +4070,16 @@ export interface components {
         OrganizationUpdate: {
             /** Name */
             name?: string | null;
+            /** Domain */
+            domain?: string | null;
             /** Industry */
             industry?: string | null;
             /** Plan Tier */
             plan_tier?: string | null;
             /** Status */
             status?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
             /** Max Recruiter Seats */
             max_recruiter_seats?: number | null;
             /** Max Active Jobs */
@@ -4229,7 +4539,9 @@ export interface components {
             /** Extracted Text */
             extracted_text?: string | null;
             /** Format Checks */
-            format_checks?: Record<string, never> | null;
+            format_checks?: {
+                [key: string]: unknown;
+            } | null;
             /** Action Verbs */
             action_verbs?: string[] | null;
             /** Matched Job Title */
@@ -4368,7 +4680,9 @@ export interface components {
             /** Query */
             query: string;
             /** Interpreted */
-            interpreted: Record<string, never>;
+            interpreted: {
+                [key: string]: unknown;
+            };
             /**
              * Candidates
              * @default []
@@ -4468,13 +4782,11 @@ export interface components {
          * @description A recruiter adds someone who isn't on the platform yet. Private to the recruiter's organization.
          */
         SourcedCandidateCreate: {
-            /** Full Name */
-            full_name: string;
             /**
              * Title
              * @default
              */
-            title: string;
+            title: string | null;
             /** Bio */
             bio?: string | null;
             /** Phone */
@@ -4521,6 +4833,8 @@ export interface components {
             languages?: components["schemas"]["LanguageItem"][] | null;
             /** Projects */
             projects?: components["schemas"]["ProjectItem"][] | null;
+            /** Full Name */
+            full_name: string;
             /**
              * Email
              * Format: email
@@ -4632,6 +4946,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /** WeightsIn */
         WeightsIn: {
@@ -6779,6 +7097,98 @@ export interface operations {
             };
         };
     };
+    get_all_organizations_admin_api_v1_admin_organizations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    update_organization_admin_api_v1_admin_organizations__org_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_organization_status_admin_api_v1_admin_organizations__org_id__toggle_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_all_users_admin_api_v1_admin_users_get: {
         parameters: {
             query?: never;
@@ -6794,7 +7204,132 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    update_user_admin_api_v1_admin_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_user_status_admin_api_v1_admin_users__user_id__toggle_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_encryption_diagnostics_api_v1_admin_encryption_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncryptionStatusOut"];
+                };
+            };
+        };
+    };
+    test_encryption_engine_api_v1_admin_encryption_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EncryptionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncryptionTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7580,6 +8115,119 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AIRequestOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_api_v1_copilot_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conversations_api_v1_copilot_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"][];
+                };
+            };
+        };
+    };
+    conversation_api_v1_copilot_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_api_v1_copilot_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

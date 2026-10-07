@@ -15,9 +15,10 @@ import { JobsForYouPage } from "@/features/talent-match/JobsForYouPage";
 import { TalentMatchPage } from "@/features/talent-match/TalentMatchPage";
 import { ResumeImportPage } from "@/features/ai/ResumeImportPage";
 import { TeamPage } from "@/features/team/TeamPage";
+import { CopilotPage } from "@/features/copilot/CopilotPage";
 import { RedirectIfAuthenticated, RequireAuth, RequireRole } from "@/lib/auth/guards";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
+import { canUseCopilot, isCandidate, isOrgAdmin, isOrgMember, isSuperAdmin } from "@/lib/auth/roles";
 import type { User } from "@/lib/api/types";
 import { AppShell } from "./layout/AppShell";
 
@@ -88,6 +89,7 @@ export const routes: RouteObject[] = [
           { path: "talent-match", element: hiring(<TalentMatchPage />) },
           { path: "jobs-for-you", element: <RequireRole allow={isCandidate}><JobsForYouPage /></RequireRole> },
           { path: "search", element: <SearchPage /> },
+          { path: "copilot", element: <RequireRole allow={canUseCopilot}><CopilotPage /></RequireRole> },
           {
             path: "team",
             element: (

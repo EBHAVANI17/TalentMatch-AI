@@ -26,3 +26,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
+
+/** Recruiters, hiring managers and org admins (matches the API's candidates:search_pool rule). */
+export const canUseCopilot = (u: User | null) =>
+  isOrgMember(u) && ["ORG_ADMIN", "EMPLOYER_ADMIN", "RECRUITER", "HIRING_MANAGER"].includes(u?.role ?? "");
