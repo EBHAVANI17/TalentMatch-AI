@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     # Database
     database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'talentmatch_production.db'}"
     auto_migrate: bool = True  # run Alembic migrations on startup
+    # PostgreSQL roles (see alembic 0012). DATABASE_URL is the request role (talentmatch_app:
+    # no BYPASSRLS, not the owner). Unset URLs fall back to DATABASE_URL (fine for SQLite/dev).
+    database_owner_url: str = ""   # migrations; the role that owns the tables (BYPASSRLS)
+    database_admin_url: str = ""   # talentmatch_admin (BYPASSRLS): platform-admin requests, seed, maintenance
+    database_worker_url: str = ""  # talentmatch_worker: outbox/background workers
+    # Row-level security. False = emergency fallback to app-only tenant checks: request sessions
+    # use the admin role. Production logs loudly when it is off.
+    rls_enforced: bool = True
 
     # Auth
     jwt_secret_key: str = DEV_JWT_SECRET
@@ -143,6 +151,11 @@ class Settings(BaseSettings):
         problems = []
         if self.jwt_secret_key == DEV_JWT_SECRET or len(self.jwt_secret_key) < 32:
             problems.append("JWT_SECRET_KEY must be set to a random value of at least 32 characters")
+        if not self.database_url.startswith("sqlite"):
+            for name in ("database_owner_url", "database_admin_url", "database_worker_url"):
+                url = getattr(self, name)
+                if not url or url == self.database_url:
+                    problems.append(f"{name.upper()} must be set to its own database role")
         if not self.data_encryption_keys.strip():
             problems.append("DATA_ENCRYPTION_KEYS must be set (generate with Fernet.generate_key())")
         if self.demo_mode:

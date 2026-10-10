@@ -1,7 +1,7 @@
 """Super-admin user/organization management rules."""
 import uuid
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.core.security import hash_password
 from app.models.db_models import User
 

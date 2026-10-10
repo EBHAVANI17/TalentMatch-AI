@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.adapters.embeddings import get_embedder
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.matching import embeddings
 from app.models.db_models import CandidateProfile, Embedding, Job
 

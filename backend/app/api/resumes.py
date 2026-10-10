@@ -241,7 +241,7 @@ async def upload_and_process_resume(
     # Record AI Telemetry
     db.add(AIUsageRecord(
         id=f"ai_{uuid.uuid4().hex[:8]}",
-        organization_id=None,
+        organization_id=ctx.org_id,
         user_id=current_user.id,
         operation_type="resume_parsing",
         provider="rule-based",  # no AI model is involved in this analysis yet
@@ -263,6 +263,7 @@ async def upload_and_process_resume(
         entity_id=resume.id,
         user_id=current_user.id,
         user_email=current_user.email,
+        organization_id=ctx.org_id,
         details={"filename": filename, "score": eval_result["overall"]}
     )
 

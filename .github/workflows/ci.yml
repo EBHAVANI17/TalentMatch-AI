@@ -1,0 +1,142 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # Backend Testing & Linting (FastAPI, SQLite, Postgres + pgvector)
+  # =========================================================================
+  backend:
+    name: Backend Tests & Quality
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: talentmatch
+          POSTGRES_PASSWORD: talentmatch
+          POSTGRES_DB: talentmatch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U talentmatch -d talentmatch"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+
+      - name: Initialize PostgreSQL extensions & test database
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          PGPASSWORD=talentmatch psql -h localhost -U talentmatch -d talentmatch -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          PGPASSWORD=talentmatch psql -h localhost -U talentmatch -d talentmatch -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+          PGPASSWORD=talentmatch psql -h localhost -U talentmatch -d talentmatch -c "CREATE DATABASE talentmatch_test OWNER talentmatch;" || true
+          PGPASSWORD=talentmatch psql -h localhost -U talentmatch -d talentmatch_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          PGPASSWORD=talentmatch psql -h localhost -U talentmatch -d talentmatch_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+
+      - name: Run Pytest (SQLite - Fast Unit & Automation Suite)
+        env:
+          ENVIRONMENT: test
+          DEMO_MODE: 'true'
+          JWT_SECRET_KEY: ci-test-secret-key-at-least-thirty-two-chars
+        run: |
+          python -m pytest -v
+
+      - name: Run Pytest (PostgreSQL + pgvector Integration & RLS Suite)
+        env:
+          ENVIRONMENT: test
+          DEMO_MODE: 'true'
+          JWT_SECRET_KEY: ci-test-secret-key-at-least-thirty-two-chars
+          DATABASE_URL: postgresql+psycopg://talentmatch:talentmatch@localhost:5432/talentmatch
+          TEST_DATABASE_URL: postgresql+psycopg://talentmatch:talentmatch@localhost:5432/talentmatch_test
+        run: |
+          python -m pytest -v
+
+  # =========================================================================
+  # Frontend Checks (Vite, React, TypeScript, Vitest)
+  # =========================================================================
+  frontend:
+    name: Frontend Typecheck, Tests & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Run Vitest Unit & Component Tests
+        run: npm test
+
+      - name: Build Web Application
+        run: npm run build
+
+  # =========================================================================
+  # Docker Container Build Validation
+  # =========================================================================
+  docker:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          tags: talentmatch-api:ci-test

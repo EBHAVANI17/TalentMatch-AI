@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.core.database import SessionLocal, engine
+from app.core.database import AdminSessionLocal as SessionLocal, admin_engine as engine  # test setup bypasses RLS
 from app.core.security import hash_password
 from app.events import handlers
 from app.models.db_models import AuditLog, Membership, Organization, User

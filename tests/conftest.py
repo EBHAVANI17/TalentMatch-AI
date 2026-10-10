@@ -15,9 +15,22 @@ sys.path.insert(0, BACKEND_DIR)
 
 # Must be set before anything imports app.core.database / app.core.config.
 _tmp_dir = tempfile.mkdtemp(prefix="talentmatch_test_")
-os.environ["DATABASE_URL"] = os.environ.get(
-    "TEST_DATABASE_URL", f"sqlite:///{os.path.join(_tmp_dir, 'test.db')}"
-)
+TEST_ROLE_PASSWORD = "tm-test-only"  # test databases only; set on the roles below after migrations
+PG_TEST_URL = os.environ.get("TEST_DATABASE_URL")
+if PG_TEST_URL:
+    # Postgres: migrations run as the URL's (owner) role; requests run as talentmatch_app under RLS.
+    from sqlalchemy.engine import make_url
+
+    def _as_role(role: str) -> str:
+        return make_url(PG_TEST_URL).set(username=role, password=TEST_ROLE_PASSWORD).render_as_string(hide_password=False)
+
+    os.environ["DATABASE_OWNER_URL"] = PG_TEST_URL
+    os.environ["DATABASE_URL"] = _as_role("talentmatch_app")
+    os.environ["DATABASE_ADMIN_URL"] = _as_role("talentmatch_admin")
+    os.environ["DATABASE_WORKER_URL"] = _as_role("talentmatch_worker")
+    os.environ["RLS_ENFORCED"] = "true"
+else:
+    os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_tmp_dir, 'test.db')}"
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEMO_MODE", "true")
 # The whole suite runs from one client IP; rate limits get their own focused tests.
@@ -38,17 +51,26 @@ os.environ.setdefault("STORAGE_LOCAL_DIR", os.path.join(_tmp_dir, "documents"))
 def _seeded_database():
     from sqlalchemy import text
 
-    from app.core.database import Base, engine
+    from app.core.database import Base, admin_engine, engine, owner_engine, worker_engine
+    from app.db.migrations import run_migrations
     from app.db.seed import init_db
 
-    if engine.dialect.name != "sqlite":
-        # Start every Postgres run from an empty schema.
-        Base.metadata.drop_all(bind=engine)
-        with engine.begin() as conn:
+    if owner_engine.dialect.name != "sqlite":
+        # Start every Postgres run from an empty schema (as the owner).
+        with owner_engine.begin() as conn:
+            conn.execute(text("DROP VIEW IF EXISTS public_org_profiles"))
+        Base.metadata.drop_all(bind=owner_engine,
+                               tables=[t for t in Base.metadata.sorted_tables if not t.info.get("is_view")])
+        with owner_engine.begin() as conn:
             conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        run_migrations()  # creates the roles; give them test-only passwords before anything connects
+        with owner_engine.begin() as conn:
+            for role in ("talentmatch_app", "talentmatch_worker", "talentmatch_admin"):
+                conn.execute(text(f"ALTER ROLE {role} PASSWORD '{TEST_ROLE_PASSWORD}'"))
     init_db()  # runs migrations, then seeds demo data (DEMO_MODE=true)
     yield
-    engine.dispose()
+    for e in (engine, admin_engine, worker_engine, owner_engine):
+        e.dispose()
 
 
 # Demo personas from app/db/seed.py
@@ -82,3 +104,12 @@ def auth(client):
             _token_cache[persona] = res.json()["access_token"]
         return {"Authorization": f"Bearer {_token_cache[persona]}"}
     return headers_for
+
+
+@pytest.fixture(autouse=True)
+def _no_silent_audit_failures(caplog):
+    """log_audit_event swallows errors; under row-level security that would hide rejected writes."""
+    yield
+    failures = [r.getMessage() for r in caplog.records
+                if r.name == "app.services.audit_service" and r.levelname == "ERROR"]
+    assert not failures, f"Audit writes failed: {failures}"

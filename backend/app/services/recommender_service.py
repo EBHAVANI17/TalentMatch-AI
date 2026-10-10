@@ -86,7 +86,8 @@ def calculate_match(candidate: CandidateProfile, job: Job, db: Optional[Session]
 
 def get_job_out(job: Job) -> JobOut:
     j: Any = job
-    org = j.organization
+    # Organization members see their organization; candidates and visitors see the public profile
+    org = j.organization or j.public_org
     posted = j.published_at or j.created_at
     posted_date = posted.strftime("%Y-%m-%d") if posted is not None else ""
     data: Dict[str, Any] = {
@@ -109,7 +110,7 @@ def get_job_out(job: Job) -> JobOut:
         "salary_max": j.salary_max,
         "equity": j.equity,
         "required_education": j.required_education,
-        "urgency": j.urgency,
+        "urgency": j.urgency or "",  # internal (job_private): empty for candidates and visitors
         "status": j.status,
         "benefits": j.benefits,
         "applicants_count": j.applicants_count,

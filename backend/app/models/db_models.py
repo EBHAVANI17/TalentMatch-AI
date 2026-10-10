@@ -9,7 +9,8 @@ from pgvector.sqlalchemy import Vector
 
 from app.core.config import settings
 from app.core.crypto import EncryptedString, EncryptedText
-from sqlalchemy.orm import relationship
+from sqlalchemy import event as sa_event, select
+from sqlalchemy.orm import deferred, relationship
 from app.core.database import Base
 
 def utc_now() -> datetime:
@@ -85,7 +86,9 @@ class User(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     email = Column(String(128), unique=True, nullable=False, index=True)
-    hashed_password = Column(String(256), nullable=False)
+    # No SELECT/UPDATE for the app role (column privileges); read via auth_user_by_email(),
+    # written via tm_set_password_hash() or at INSERT
+    hashed_password = deferred(Column(String(256), nullable=False))
     full_name = Column(String(128), nullable=False)
     
     # Platform role (SUPER_ADMIN, CANDIDATE) is authoritative here. For organization staff, role and
@@ -352,7 +355,6 @@ class Job(Base):
     salary_max = Column(Integer, default=190000)
     equity = Column(String(64), default="0.1% - 0.25%")
     required_education = Column(String(64), default="Bachelor's")
-    urgency = Column(String(32), default="High")
     status = Column(String(32), default="Active", index=True) # Active, Closed, Draft, Paused
     benefits_json = Column(Text, default="[]")
     applicants_count = Column(Integer, default=0)
@@ -362,8 +364,6 @@ class Job(Base):
     seniority = Column(String(32), default="")
     industry = Column(String(64), default="")
     application_deadline = Column(DateTime, nullable=True)
-    screening_questions_json = Column(Text, default="[]")
-    interview_criteria_json = Column(Text, default="[]")
     published_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
@@ -373,6 +373,40 @@ class Job(Base):
     organization = relationship("Organization", back_populates="jobs")
     skill_links = relationship("JobSkill", back_populates="job", cascade="all, delete-orphan")
     applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
+    # Internal hiring details; row-level security hides them from candidates and the public
+    private = relationship("JobPrivate", uselist=False, back_populates="job", cascade="all, delete-orphan",
+                           lazy="selectin")
+    public_org = relationship("PublicOrgProfile", primaryjoin="foreign(Job.organization_id) == PublicOrgProfile.id",
+                              viewonly=True, uselist=False, lazy="selectin")
+
+    def _private_row(self) -> "JobPrivate":
+        if self.private is None:
+            self.private = JobPrivate()
+        return self.private
+
+    @property
+    def urgency(self):
+        return self.private.urgency if self.private is not None else None
+
+    @urgency.setter
+    def urgency(self, value):
+        self._private_row().urgency = value
+
+    @property
+    def screening_questions_json(self):
+        return self.private.screening_questions_json if self.private is not None else "[]"
+
+    @screening_questions_json.setter
+    def screening_questions_json(self, value):
+        self._private_row().screening_questions_json = value
+
+    @property
+    def interview_criteria_json(self):
+        return self.private.interview_criteria_json if self.private is not None else "[]"
+
+    @interview_criteria_json.setter
+    def interview_criteria_json(self, value):
+        self._private_row().interview_criteria_json = value
 
     @property
     def required_skills(self):
@@ -398,6 +432,32 @@ class Job(Base):
     def benefits(self):
         return _parse_json(self.benefits_json, [])
 
+
+class JobPrivate(Base):
+    """Internal hiring details of a job: visible to the job's organization only."""
+    __tablename__ = "job_private"
+
+    job_id = Column(String(64), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    urgency = Column(String(32), default="High")
+    screening_questions_json = Column(Text, default="[]")
+    interview_criteria_json = Column(Text, default="[]")
+
+    job = relationship("Job", back_populates="private")
+
+
+class PublicOrgProfile(Base):
+    """Read-only view public_org_profiles: what candidates and visitors may see about an organization."""
+    __tablename__ = "public_org_profiles"
+    __table_args__ = {"info": {"is_view": True}}
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(128))
+    domain = Column(String(128))
+    industry = Column(String(64))
+    logo_icon = Column(String(64))
+    website = Column(String(256))
+
 # =========================================================================
 # 6. APPLICATIONS & STAGE AUDIT HISTORY
 # =========================================================================
@@ -422,6 +482,8 @@ class Application(Base):
     # Relationships
     job = relationship("Job", back_populates="applications")
     candidate = relationship("CandidateProfile", back_populates="applications")
+
+    __table_args__ = (Index("ix_applications_candidate_org", "candidate_id", "organization_id"),)
     stage_history = relationship("ApplicationStageHistory", back_populates="application", cascade="all, delete-orphan")
     interviews = relationship("Interview", back_populates="application", cascade="all, delete-orphan")
 
@@ -434,6 +496,7 @@ class ApplicationStageHistory(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     application_id = Column(String(64), ForeignKey("applications.id"), nullable=False, index=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # from the application
     from_stage = Column(String(32), nullable=False)
     to_stage = Column(String(32), nullable=False)
     changed_by_user_id = Column(String(64), ForeignKey("users.id"), nullable=True)
@@ -450,6 +513,7 @@ class Interview(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     application_id = Column(String(64), ForeignKey("applications.id"), nullable=False, index=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # from the application
     interviewer_user_id = Column(String(64), ForeignKey("users.id"), nullable=True)
     round_name = Column(String(128), default="Technical System Design Round")
     scheduled_at = Column(DateTime, nullable=True)
@@ -465,6 +529,7 @@ class InterviewFeedback(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     interview_id = Column(String(64), ForeignKey("interviews.id"), nullable=False, index=True)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # from the interview
     interviewer_id = Column(String(64), ForeignKey("users.id"), nullable=False)
     rating = Column(Integer, default=4) # 1-5
     technical_score = Column(Integer, default=85)
@@ -519,6 +584,8 @@ class Notification(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     user_id = Column(String(64), ForeignKey("users.id"), nullable=False, index=True)
+    # The organization that caused it (NULL for platform/self notifications). Recipients read by user_id.
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(128), nullable=False)
     message = Column(Text, nullable=False)
     type = Column(String(32), default="system") # application, stage_change, outreach, system
@@ -577,7 +644,7 @@ class UserToken(Base):
     id = Column(String(64), primary_key=True)
     user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     purpose = Column(String(32), nullable=False)  # refresh | email_verify | password_reset
-    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    token_hash = deferred(Column(String(64), nullable=False, unique=True, index=True))  # looked up via auth_token_owner()
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
     # Refresh tokens: the organization the session is working in, kept across refreshes
@@ -594,7 +661,7 @@ class Invitation(Base):
     organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     email = Column(String(128), nullable=False, index=True)
     role = Column(String(32), nullable=False, default="RECRUITER")
-    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    token_hash = deferred(Column(String(64), nullable=False, unique=True, index=True))  # looked up via auth_invitation()
     invited_by_user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(16), nullable=False, default="pending", index=True)  # pending | accepted | revoked
     expires_at = Column(DateTime, nullable=False)
@@ -784,6 +851,8 @@ class Embedding(Base):
     entity_type = Column(String(16), nullable=False)  # candidate | job
     entity_id = Column(String(64), nullable=False)
     organization_id = Column(String(64), nullable=True, index=True)  # owner org for private records
+    # Readable by every organization: searchable marketplace candidates (kept in sync with is_searchable)
+    is_public = Column(Boolean, nullable=False, default=False, server_default=sa_false())
     model = Column(String(64), nullable=False)
     content_hash = Column(String(64), nullable=False)  # skip re-embedding unchanged text
     vector = Column(LargeBinary().with_variant(Vector(settings.embedding_dim), "postgresql"), nullable=False)
@@ -825,6 +894,7 @@ class Match(Base):
 
     __table_args__ = (
         Index("uq_match_job_candidate", "job_id", "candidate_id", unique=True),
+        Index("ix_matches_org_job_score", "organization_id", "job_id", "score"),
         Index("ix_matches_job_score", "job_id", "score"),
     )
 
@@ -928,6 +998,9 @@ class CopilotMessage(Base):
 
     id = Column(String(64), primary_key=True)
     conversation_id = Column(String(64), ForeignKey("copilot_conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Copied from the conversation (row-level security without a join)
+    organization_id = Column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     role = Column(String(16), nullable=False)  # user | assistant
     content = Column(EncryptedText, nullable=False, default="")
     citations_json = Column(Text, nullable=False, default="{}")  # {"C1": {"kind": "candidate", "id": "cand_001"}}
@@ -939,6 +1012,8 @@ class CopilotMessage(Base):
 
     conversation = relationship("CopilotConversation", back_populates="messages")
 
+    __table_args__ = (Index("ix_copilot_messages_org_conv", "organization_id", "conversation_id", "created_at"),)
+
     @property
     def citations(self) -> dict:
         return _parse_json(self.citations_json, {})
@@ -946,3 +1021,54 @@ class CopilotMessage(Base):
     @property
     def follow_ups(self) -> list:
         return _parse_json(self.follow_ups_json, [])
+
+
+class EventDeadLetter(Base):
+    """Events that must not be retried (e.g. organization mismatch). Worker and platform admins only."""
+    __tablename__ = "events_dead_letter"
+
+    id = Column(String(64), primary_key=True)
+    event_id = Column(String(64), nullable=False, index=True)
+    type = Column(String(64), nullable=False)
+    organization_id = Column(String(64), nullable=True, index=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    reason = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=utc_now, index=True)
+
+
+# ---------------------------------------------------------------------------
+# Denormalized organization_id (row-level security): copied from the parent on insert,
+# unless the caller set it. The policies' WITH CHECK rejects a mismatched value.
+# ---------------------------------------------------------------------------
+def _copy_org_from(parent_table, parent_key_attr: str):
+    def listener(mapper, connection, child):
+        if child.organization_id is None:
+            parent_id = getattr(child, parent_key_attr)
+            child.organization_id = connection.execute(
+                select(parent_table.c.organization_id).where(parent_table.c.id == parent_id)
+            ).scalar()
+    return listener
+
+
+sa_event.listen(ApplicationStageHistory, "before_insert", _copy_org_from(Application.__table__, "application_id"))
+sa_event.listen(Interview, "before_insert", _copy_org_from(Application.__table__, "application_id"))
+sa_event.listen(InterviewFeedback, "before_insert", _copy_org_from(Interview.__table__, "interview_id"))
+
+
+@sa_event.listens_for(CopilotMessage, "before_insert")
+def _copilot_message_scope(mapper, connection, child):
+    if child.organization_id is None or child.user_id is None:
+        row = connection.execute(
+            select(CopilotConversation.__table__.c.organization_id, CopilotConversation.__table__.c.user_id)
+            .where(CopilotConversation.__table__.c.id == child.conversation_id)
+        ).first()
+        if row:
+            child.organization_id = child.organization_id or row[0]
+            child.user_id = child.user_id or row[1]
+
+
+@sa_event.listens_for(JobPrivate, "before_insert")
+def _job_private_scope(mapper, connection, child):
+    if child.organization_id is None and child.job is not None:
+        child.organization_id = child.job.organization_id
+

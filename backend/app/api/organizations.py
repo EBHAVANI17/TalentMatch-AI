@@ -334,10 +334,12 @@ def add_membership(org_id: str, payload: MembershipCreate, db: Session = Depends
                    ctx: TenantContext = Depends(get_tenant)):
     """Add an existing account (people without an account get an invitation instead)."""
     org, via_parent = _membership_scope(db, ctx, org_id)
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
-    if user is None:
+    from app.db.functions import account_by_email  # accounts outside this organization aren't visible under RLS
+    account = account_by_email(db, payload.email.lower())
+    if account is None:
         raise HTTPException(status_code=404, detail="No account with that email. Send an invitation instead.")
-    m = membership_service.add_member(db, org=org, user=user, role=payload.role, actor=ctx.user, via_parent=via_parent)
+    m = membership_service.add_member_by_id(db, org=org, user_id=account["id"], account_role=account["role"],
+                                            role=payload.role, actor=ctx.user, via_parent=via_parent)
     db.commit()
     db.refresh(m)
     return _membership_out(m)

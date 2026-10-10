@@ -176,7 +176,9 @@ def get_current_user_optional(
     if not payload or "sub" not in payload:
         return None
     
+    from app.core.database import set_tenant
     from app.models.db_models import User
+    set_tenant(db, user_id=payload["sub"])  # row-level security: the caller's own row
     user = db.query(User).filter(User.id == payload["sub"]).first()
     return user
 
@@ -195,7 +197,9 @@ def get_current_user(
     if not payload or "sub" not in payload:
         raise credentials_exception
     
+    from app.core.database import set_tenant
     from app.models.db_models import User
+    set_tenant(db, user_id=payload["sub"])  # row-level security: the caller's own row
     user = db.query(User).filter(User.id == payload["sub"]).first()
     if not user or not user.is_active:
         raise credentials_exception

@@ -9,7 +9,7 @@ from alembic.config import Config
 from sqlalchemy import inspect
 
 from app.core.config import BACKEND_DIR
-from app.core.database import engine
+from app.core.database import owner_engine as engine  # migrations run as the table owner
 
 logger = logging.getLogger(__name__)
 

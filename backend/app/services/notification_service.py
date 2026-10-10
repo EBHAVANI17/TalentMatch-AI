@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.email import EmailMessage, get_email_sender
 from app.core.config import settings
+from app.db import functions as dbf
 from app.models.db_models import Notification, User
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class NotificationMessage:
     kind: str = "system"  # application | stage_change | job | interview | system
     link: str = ""
     event_id: Optional[str] = None
+    organization_id: Optional[str] = None  # the organization that caused it
 
 
 class NotificationChannel(Protocol):
@@ -45,9 +47,7 @@ class InAppChannel:
         return True
 
     def send(self, db: Session, msg: NotificationMessage) -> None:
-        if msg.event_id and db.query(Notification).filter(
-            Notification.event_id == msg.event_id, Notification.user_id == msg.user.id
-        ).first():
+        if msg.event_id and dbf.notification_exists(db, msg.event_id, msg.user.id):
             return  # already delivered for this event (retry)
         db.add(Notification(
             id=f"notif_{uuid.uuid4().hex[:10]}",
@@ -57,6 +57,7 @@ class InAppChannel:
             type=msg.kind,
             link=msg.link,
             event_id=msg.event_id,
+            organization_id=msg.organization_id,
             is_read=False,
         ))
 
@@ -80,11 +81,12 @@ CHANNELS: List[NotificationChannel] = [InAppChannel(), EmailChannel()]
 
 
 def notify(db: Session, user: Optional[User], *, title: str, message: str, kind: str = "system",
-           link: str = "", event_id: Optional[str] = None) -> None:
+           link: str = "", event_id: Optional[str] = None, organization_id: Optional[str] = None) -> None:
     """Queue a notification on every enabled channel. The caller commits."""
     if user is None:
         return
-    msg = NotificationMessage(user=user, title=title, message=message, kind=kind, link=link, event_id=event_id)
+    msg = NotificationMessage(user=user, title=title, message=message, kind=kind, link=link, event_id=event_id,
+                              organization_id=organization_id)
     for channel in CHANNELS:
         if not channel.enabled_for(msg):
             continue
@@ -95,16 +97,17 @@ def notify(db: Session, user: Optional[User], *, title: str, message: str, kind:
 
 
 def create_notification(db: Session, user_id: str, title: str, message: str,
-                        notif_type: str = "system", link: str = "") -> Optional[Notification]:
-    """Backward-compatible helper: write an in-app notification and commit immediately."""
+                        notif_type: str = "system", link: str = "",
+                        organization_id: Optional[str] = None) -> Optional[Notification]:
+    """Backward-compatible helper: write an in-app notification and commit immediately.
+    organization_id = the organization causing it (required when called inside an organization)."""
     try:
         notif = Notification(
             id=f"notif_{uuid.uuid4().hex[:10]}", user_id=user_id, title=title, message=message,
-            type=notif_type, link=link, is_read=False,
+            type=notif_type, link=link, is_read=False, organization_id=organization_id,
         )
         db.add(notif)
-        db.commit()
-        db.refresh(notif)
+        db.commit()  # no refresh: the recipient's notifications aren't readable by the sender under RLS
         return notif
     except Exception:
         db.rollback()

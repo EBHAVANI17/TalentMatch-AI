@@ -243,7 +243,7 @@ def test_resume_upload_and_intelligence(auth):
 
 def test_application_lifecycle_and_audit(auth):
     headers = auth("stripe")
-    from app.core.database import SessionLocal
+    from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
     from app.models.db_models import Application, ApplicationStageHistory
     
     # Clean up test application record to ensure test idempotency across runs

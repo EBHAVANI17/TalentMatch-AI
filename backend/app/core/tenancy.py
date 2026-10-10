@@ -23,7 +23,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import and_, exists, literal, or_
 from sqlalchemy.orm import Query, Session
 
-from app.core.database import get_db
+from app.core.database import get_db, set_tenant
 from app.core.security import ROLE_PERMISSIONS, decode_access_token, security_bearer
 from app.models.db_models import Application, CandidateProfile, Job, Membership, Organization, User
 from app.services.membership_service import ACTIVE, DELETED_STATUS, ORG_ADMIN_ROLES, ORG_ROLES, PLATFORM_ROLES
@@ -114,6 +114,7 @@ def resolve_context(db: Session, token: Optional[str]) -> Optional[TenantContext
     if not payload or "sub" not in payload:
         return None
     claimed_org = payload.get("active_org_id")
+    set_tenant(db, user_id=payload["sub"])  # row-level security: own user row and memberships first
     target_org = literal(claimed_org) if claimed_org else User.organization_id  # membership-guard: ok (default-org fallback)
     row = (
         db.query(User, Membership, Organization)
@@ -129,6 +130,7 @@ def resolve_context(db: Session, token: Optional[str]) -> Optional[TenantContext
     if claimed_org and membership is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "You are no longer a member of this organization. Switch to another organization.")
+    set_tenant(db, user_id=user.id, org_id=membership.organization_id if membership else None)
     return TenantContext(user=user, membership=membership, organization=org)
 
 

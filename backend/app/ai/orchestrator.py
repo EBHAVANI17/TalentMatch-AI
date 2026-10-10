@@ -62,10 +62,8 @@ def _limit_reason(db: Session, user: Optional[User], org: Optional[Organization]
     if org is not None and org.monthly_ai_credits and (org.monthly_ai_credits_used or 0) >= org.monthly_ai_credits:
         return "Your organization has used all of this month's AI credits."
     if user is not None and settings.ai_user_daily_limit:
-        start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        used = db.query(AIRequest).filter(
-            AIRequest.user_id == user.id, AIRequest.created_at >= start, AIRequest.status == "success"
-        ).count()
+        from app.db.functions import user_ai_usage_today  # counts across all of the user's organizations
+        used = user_ai_usage_today(db, user.id)
         if used >= settings.ai_user_daily_limit:
             return "You've reached today's AI limit."
     return None
@@ -96,6 +94,8 @@ def run_structured(
     )
     attempts: list = []
 
+    request_id = record.id  # read before commit: candidates can't read the row back under RLS
+
     def finish(data: T, status: str, provider: str, model: str, notice: str, error: str = "") -> AIOutcome[T]:
         record.status, record.provider, record.model, record.error = status, provider, model, error[:2000]
         record.attempts = json.dumps(attempts)
@@ -104,7 +104,7 @@ def run_structured(
         db.add(record)
         db.commit()
         method = "ai" if status == "success" else "rules"
-        return AIOutcome(data=data, method=method, provider=provider, model=model, request_id=record.id, notice=notice)
+        return AIOutcome(data=data, method=method, provider=provider, model=model, request_id=request_id, notice=notice)
 
     router = get_llm_router()
     blocked = _limit_reason(db, user, org) if router.available else None

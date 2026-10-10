@@ -72,6 +72,17 @@ def _owner_org(entity_type: str, obj) -> Optional[str]:
     return obj.organization_id if entity_type == JOB else obj.owner_org_id
 
 
+def _is_public(entity_type: str, obj) -> bool:
+    """Readable by every organization: searchable marketplace candidates only."""
+    return entity_type == CANDIDATE and obj.owner_org_id is None and bool(obj.is_searchable)
+
+
+def sync_public_flag(db: Session, candidate) -> None:
+    """Call when a candidate's is_searchable (or ownership) changes, even if their text didn't."""
+    db.query(Embedding).filter(Embedding.entity_type == CANDIDATE, Embedding.entity_id == candidate.id).update(
+        {Embedding.is_public: _is_public(CANDIDATE, candidate)}, synchronize_session=False)
+
+
 def refresh(db: Session, entity_type: str, objects: Iterable) -> int:
     """(Re)embed objects whose text changed. Batches model calls. Returns how many were embedded. Caller commits."""
     embedder = get_embedder()
@@ -91,6 +102,8 @@ def refresh(db: Session, entity_type: str, objects: Iterable) -> int:
         content = build(obj)
         digest = _hash(embedder.name, content)
         current = existing.get(obj.id)
+        if current is not None and current.is_public != _is_public(entity_type, obj):
+            current.is_public = _is_public(entity_type, obj)
         if content and (current is None or current.content_hash != digest):
             todo.append((obj, content, digest))
     if not todo:
@@ -102,6 +115,7 @@ def refresh(db: Session, entity_type: str, objects: Iterable) -> int:
             row = Embedding(id=f"emb_{uuid.uuid4().hex[:16]}", entity_type=entity_type, entity_id=obj.id, model=embedder.name)
             db.add(row)
         row.organization_id = _owner_org(entity_type, obj)
+        row.is_public = _is_public(entity_type, obj)
         row.content_hash = digest
         row.vector = _to_db(db, vector)
         row.updated_at = datetime.utcnow()

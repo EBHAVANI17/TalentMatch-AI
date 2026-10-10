@@ -36,13 +36,13 @@ def notify_application_created(db: Session, event: OutboxEvent) -> None:
     company = job.organization.name if job.organization else "the employer"
 
     if app.source == "applied":
-        notify(db, candidate.user, kind="application", event_id=event.id, link="/applications",
+        notify(db, candidate.user, kind="application", event_id=event.id, organization_id=event.organization_id, link="/applications",
                title=f"Application sent: {job.title}",
                message=f"Your application to {company} was received. You'll be notified as it moves through their process.")
     for member in _hiring_team(db, app.organization_id, event.actor_user_id):
         name = candidate.user.full_name if candidate.user else "A candidate"
         verb = "applied to" if app.source == "applied" else "was added to"
-        notify(db, member, kind="application", event_id=event.id, link=f"/app/jobs/{job.id}",
+        notify(db, member, kind="application", event_id=event.id, organization_id=event.organization_id, link=f"/app/jobs/{job.id}",
                title=f"New candidate for {job.title}",
                message=f"{name} {verb} {job.title}. Match score: {app.match_score}%.")
 
@@ -60,7 +60,7 @@ def notify_stage_changed(db: Session, event: OutboxEvent) -> None:
         title, message = f"Update on {job_title}", "The team has decided not to move forward this time. Thank you for your interest."
     else:
         title, message = f"Application update: {job_title}", f"Your application moved to {to_stage}."
-    notify(db, app.candidate.user, kind="stage_change", event_id=event.id, link="/applications", title=title, message=message)
+    notify(db, app.candidate.user, kind="stage_change", event_id=event.id, organization_id=event.organization_id, link="/applications", title=title, message=message)
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ def discover_candidates(db: Session, event: OutboxEvent) -> None:
     summary = matching.summarize(rows)
 
     for member in _hiring_team(db, job.organization_id, None):
-        notify(db, member, kind="job", event_id=event.id, link=f"/app/talent-match?job={job.id}",
+        notify(db, member, kind="job", event_id=event.id, organization_id=event.organization_id, link=f"/app/talent-match?job={job.id}",
                title=f"{summary['potential']} potentially relevant candidates for {job.title}",
                message=f"{summary['strong']} strong matches (80%+) out of {summary['considered']} profiles reviewed.")
 
@@ -126,6 +126,6 @@ def discover_candidates(db: Session, event: OutboxEvent) -> None:
         cand = row.candidate
         if (row.score >= STRONG_MATCH and cand.owner_org_id is None and cand.availability != "not_looking"
                 and cand.id not in applied and cand.user and cand.user.is_active):
-            notify(db, cand.user, kind="job", event_id=event.id, link="/app/jobs-for-you",
+            notify(db, cand.user, kind="job", event_id=event.id, organization_id=event.organization_id, link="/app/jobs-for-you",
                    title=f"New job match: {job.title} at {company}",
                    message=f"{row.score}% match to the role's listed requirements.")

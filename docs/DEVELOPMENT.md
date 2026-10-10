@@ -266,3 +266,32 @@ Code: `backend/app/copilot/` (tools, references, rules fallback, service), route
 - Rules: the last active admin can't be removed, suspended or demoted (409); seats are per organization
   (active memberships + pending invitations); organizations are soft-deleted (`status = deleted`).
 - Existing accounts accept invitations while signed in as the invited, verified email.
+
+## Row-level security (PostgreSQL)
+
+Tenant isolation is enforced twice: by the app (`core/tenancy.py`) and by PostgreSQL row-level security
+(alembic `0012`). Every tenant table has `ENABLE` + `FORCE ROW LEVEL SECURITY`; global reference tables
+(`plans`, `prompt_templates`, `skill_*`) have none and are read-only for the app.
+
+- **Roles.** Migrations run as the table owner (`DATABASE_OWNER_URL`; needs BYPASSRLS or superuser so the
+  `SECURITY DEFINER` helpers and the `public_org_profiles` view work). Requests use `talentmatch_app`
+  (`DATABASE_URL`, no BYPASSRLS). Workers use `talentmatch_worker` (`DATABASE_WORKER_URL`; may claim any
+  org's outbox events, nothing more). `talentmatch_admin` (`DATABASE_ADMIN_URL`, BYPASSRLS) is used only by
+  requests from a verified platform admin (each one is audited as `ADMIN_ENGINE_REQUEST`), the startup
+  reference-data load, the demo seed and maintenance commands (`app.db.rotate_encryption`).
+  The migration creates the roles without passwords; set them with `ALTER ROLE ... PASSWORD`.
+- **Context.** `app.org_id` / `app.user_id` are set with `set_config(..., true)` (transaction-local, like
+  `SET LOCAL`) at the start of every transaction from `session.info["tenant"]` (`core/database.set_tenant`).
+  Never use session-level `SET`: with PgBouncer/RDS Proxy transaction pooling it would leak between tenants.
+  No context = no tenant rows. Only Active jobs (the public job board) are readable without one.
+- **Before sign-in** (login, sign-up, refresh, password reset, invitations) the app can't read `users` or token
+  tables. It uses narrow functions in `app/db/functions.py` (`auth_user_by_email`, `auth_token_owner`, ...).
+  Password hashes and token hashes have no SELECT grant; change a password only via `tm_set_password_hash`.
+- **Adding a tenant table:** give it `organization_id` (or a parent it can be checked through), add policies,
+  grants and an index in a migration, add it to `tests/test_rls.py::build_tenant`. The coverage test fails until
+  the table is RLS-forced or on the explicit global allowlist.
+- **Emergency switch:** `RLS_ENFORCED=false` makes request sessions use the admin role (app checks only),
+  without a migration. Production logs it as CRITICAL at startup. Production refuses to start if
+  `DATABASE_URL` bypasses RLS or the owner/admin/worker URLs aren't separate roles.
+- Tests: `tests/test_rls.py` (Postgres only) runs raw SQL as the roles themselves. `scripts/rls_benchmark.py`
+  measures the heavy paths at 50k candidates with RLS on and off.

@@ -14,14 +14,18 @@ config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+# Migrations (CLI included) run as the table owner
+config.set_main_option("sqlalchemy.url", (settings.database_owner_url or settings.database_url).replace("%", "%%"))
 target_metadata = Base.metadata
 
 # Indexes created with raw SQL in migrations (e.g. pgvector HNSW) that the models can't express.
 MANUAL_INDEXES = {"ix_embeddings_vector_hnsw"}
+VIEWS = {"public_org_profiles"}
 
 
 def include_object(obj, name, type_, reflected, compare_to):
+    if type_ == "table" and (getattr(obj, "info", {}).get("is_view") or name in VIEWS):
+        return False  # views are created with raw SQL in migrations
     return not (type_ == "index" and name in MANUAL_INDEXES)
 
 

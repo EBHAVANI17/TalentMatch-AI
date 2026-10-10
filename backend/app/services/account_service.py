@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.adapters.email import EmailMessage, get_email_sender
 from app.core.config import settings
+from app.core.database import set_tenant, tenant_of
 from app.core.security import hash_password
+from app.db import functions as dbf
 from app.models.db_models import Invitation, Membership, Organization, User, UserToken
 from app.services import membership_service
 
@@ -68,7 +70,12 @@ def consume_token(db: Session, raw: str, purpose: str) -> Optional[User]:
 
 
 def consume_token_record(db: Session, raw: str, purpose: str) -> Optional[UserToken]:
-    record = db.query(UserToken).filter(UserToken.token_hash == _hash(raw), UserToken.purpose == purpose).first()
+    """Looks the token up by hash (before anyone is signed in), then works as its owner."""
+    found = dbf.token_owner(db, _hash(raw), purpose)
+    if found is None:
+        return None
+    set_tenant(db, user_id=found["user_id"], org_id=tenant_of(db).get("org_id"))
+    record = db.get(UserToken, found["id"])
     if record is None:
         return None
     if record.used_at is not None:
@@ -136,9 +143,11 @@ def verify_email(db: Session, raw: str) -> User:
 # ---------------------------------------------------------------------------
 def request_password_reset(db: Session, email: str) -> None:
     """Always succeeds silently so the endpoint can't be used to discover accounts."""
-    user = db.query(User).filter(User.email == email).first()
-    if user is None or not user.is_active:
+    found = dbf.user_by_email(db, email)
+    if found is None or not found["is_active"]:
         return
+    set_tenant(db, user_id=found["id"])
+    user = db.get(User, found["id"])
     revoke_tokens(db, user.id, PASSWORD_RESET)
     token = issue_token(db, user, PASSWORD_RESET, timedelta(minutes=settings.password_reset_ttl_minutes))
     get_email_sender().send(EmailMessage(
@@ -156,7 +165,7 @@ def reset_password(db: Session, raw: str, new_password: str) -> User:
     user = consume_token(db, raw, PASSWORD_RESET)
     if user is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reset link is invalid or expired")
-    user.hashed_password = hash_password(new_password)
+    dbf.set_password_hash(db, user.id, hash_password(new_password))
     user.email_verified = True  # they proved they control the inbox
     db.commit()
     revoke_tokens(db, user.id, REFRESH)  # sign out other sessions
@@ -212,8 +221,13 @@ def create_invitation(db: Session, org: Organization, email: str, role: str, inv
 
 
 def _pending_invitation(db: Session, raw: str) -> Invitation:
-    invitation = db.query(Invitation).filter(Invitation.token_hash == _hash(raw)).first()
-    if invitation is None or invitation.status != "pending" or invitation.expires_at < datetime.utcnow():
+    """Looks the invitation up by hash, then works inside the inviting organization."""
+    found = dbf.invitation_by_hash(db, _hash(raw))
+    if found is None or found["status"] != "pending" or found["expires_at"] < datetime.utcnow():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invitation is invalid or expired")
+    set_tenant(db, org_id=found["organization_id"], user_id=tenant_of(db).get("user_id"))
+    invitation = db.get(Invitation, found["id"])
+    if invitation is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invitation is invalid or expired")
     if not membership_service.is_org_usable(invitation.organization):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is not active")
@@ -223,14 +237,14 @@ def _pending_invitation(db: Session, raw: str) -> Invitation:
 def invited_account_exists(db: Session, raw: str) -> bool:
     """Whether a valid, pending invitation was sent to an existing account (400 if the invitation isn't valid)."""
     invitation = _pending_invitation(db, raw)
-    return db.query(User).filter(User.email == invitation.email).first() is not None
+    return dbf.email_exists(db, invitation.email)
 
 
 def accept_invitation(db: Session, raw: str, full_name: str, password: str) -> User:
     """New account: create it with its first membership. Single use."""
     validate_password(password)
     invitation = _pending_invitation(db, raw)
-    if db.query(User).filter(User.email == invitation.email).first():
+    if dbf.email_exists(db, invitation.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email exists. Sign in to accept the invitation.")
     user = membership_service.create_org_user(
         db, org=invitation.organization, role=invitation.role, check_seats=False,  # the invitation held the seat
@@ -241,6 +255,7 @@ def accept_invitation(db: Session, raw: str, full_name: str, password: str) -> U
     invitation.status = "accepted"
     invitation.accepted_at = datetime.utcnow()
     db.commit()
+    set_tenant(db, org_id=invitation.organization_id, user_id=user.id)
     db.refresh(user)
     return user
 

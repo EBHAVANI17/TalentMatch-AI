@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.matching.ontology import load_skill_graph
 from app.search.service import parse_query
 

@@ -53,11 +53,18 @@ def job_facts(j: Job) -> JobFacts:
 # ---------------------------------------------------------------------------
 # Organization weights
 # ---------------------------------------------------------------------------
-def get_weights(org: Optional[Organization]) -> Dict[str, float]:
+def get_weights(org: Optional[Organization], db: Optional[Session] = None, org_id: Optional[str] = None) -> Dict[str, float]:
+    """The organization's weights. Candidates can't read organizations under row-level security, so
+    pass db + org_id to fetch just the weights when `org` isn't loaded."""
     weights = dict(DEFAULT_WEIGHTS)
-    if org and org.matching_weights_json:
+    if org is not None:
+        raw = org.matching_weights_json
+    else:
+        from app.db.functions import org_matching_weights
+        raw = org_matching_weights(db, org_id) if db is not None and org_id else ""
+    if raw:
         try:
-            weights.update({k: float(v) for k, v in json.loads(org.matching_weights_json).items() if k in DEFAULT_WEIGHTS})
+            weights.update({k: float(v) for k, v in json.loads(raw).items() if k in DEFAULT_WEIGHTS})
         except (ValueError, TypeError):
             pass
     return weights
@@ -154,6 +161,13 @@ def ensure_matches(db: Session, job: Job, candidates: Iterable[CandidateProfile]
     return existing
 
 
+def _may_update_match(db: Session, row: Match) -> bool:
+    from app.core.database import tenant_of, uses_admin_role
+    if db.get_bind().dialect.name != "postgresql" or uses_admin_role(db):
+        return True
+    return tenant_of(db).get("org_id") == row.organization_id
+
+
 def ensure_matches_for_candidate(db: Session, candidate: CandidateProfile, jobs: Iterable[Job]) -> Dict[str, Match]:
     """One candidate against many jobs in a single pass (Jobs for you). Keyed by job id. Caller commits."""
     jobs = list(jobs)
@@ -169,7 +183,7 @@ def ensure_matches_for_candidate(db: Session, candidate: CandidateProfile, jobs:
     existing = {m.job_id: m for m in db.query(Match).filter(
         Match.candidate_id == candidate.id, Match.job_id.in_([j.id for j in jobs]))}
     orgs = {j.organization_id: j.organization for j in jobs}
-    weights_by_org = {org_id: get_weights(org) for org_id, org in orgs.items()}
+    weights_by_org = {org_id: get_weights(org, db, org_id) for org_id, org in orgs.items()}
 
     stale = []
     for job in jobs:
@@ -192,6 +206,15 @@ def ensure_matches_for_candidate(db: Session, candidate: CandidateProfile, jobs:
                             job_id=job.id, candidate_id=candidate.id, status="new")
                 db.add(row)
                 existing[job.id] = row
+            elif not _may_update_match(db, row):
+                # Candidates may add their own match rows but not change an organization's (RLS):
+                # show the fresh score without saving it; the organization recomputes on its side.
+                transient = Match(id=row.id, organization_id=row.organization_id, job_id=row.job_id,
+                                  candidate_id=row.candidate_id, status=row.status)
+                _store(transient, result, inputs, weights_hash)
+                db.expunge(row)
+                existing[job.id] = transient
+                continue
             _store(row, result, inputs, weights_hash)
         db.flush()
     return existing
@@ -202,7 +225,7 @@ def score_one(db: Session, job: Job, candidate: CandidateProfile) -> MatchResult
     vectors = embeddings.vectors_for(db, "candidate", [candidate.id])
     job_vec = embeddings.vectors_for(db, "job", [job.id]).get(job.id)
     return score_match(candidate_facts(candidate), job_facts(job), get_skill_graph(db),
-                       get_weights(job.organization), embeddings.cosine(job_vec, vectors.get(candidate.id)))
+                       get_weights(job.organization, db, job.organization_id), embeddings.cosine(job_vec, vectors.get(candidate.id)))
 
 
 def result_from_row(row: Match) -> dict:

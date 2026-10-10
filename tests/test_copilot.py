@@ -6,7 +6,7 @@ import pytest
 
 from app.adapters.llm import LLMRouter
 from app.ai import orchestrator
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import AIRequest, CandidateProfile
 
 from test_ai_features import FakeProvider  # same fake provider as the other AI tests

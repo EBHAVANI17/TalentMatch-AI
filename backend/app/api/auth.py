@@ -19,7 +19,9 @@ from app.models.schemas import (
 )
 from app.services import membership_service
 from app.core.config import settings
+from app.core.database import set_tenant
 from app.core.rate_limit import rate_limit
+from app.db import functions as dbf
 from app.services import account_service
 from app.services.audit_service import log_audit_event
 from app.events import emit
@@ -69,7 +71,7 @@ def issue_session(db: Session, user: User, org_id: Optional[str] = None) -> Toke
 
 
 def ensure_email_available(db: Session, email: str) -> None:
-    if db.query(User).filter(User.email == email).first():
+    if dbf.email_exists(db, email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email already exists"
@@ -78,12 +80,14 @@ def ensure_email_available(db: Session, email: str) -> None:
 
 @router.post("/login", response_model=TokenResponse, dependencies=[auth_rate_limit])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    found = dbf.user_by_email(db, payload.email)  # before sign-in: a narrow lookup, not a table read
+    if not found or not verify_password(payload.password, found["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
+    set_tenant(db, user_id=found["id"])
+    user = db.get(User, found["id"])
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -96,8 +100,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # Upgrade old password hashes to the current work factor while we have the plaintext.
-    if password_needs_rehash(user.hashed_password):
-        user.hashed_password = hash_password(payload.password)
+    if password_needs_rehash(found["hashed_password"]):
+        dbf.set_password_hash(db, user.id, hash_password(payload.password))
     user.last_login_at = datetime.utcnow()
     if user.candidate_profile:
         user.candidate_profile.last_active_at = user.last_login_at
@@ -111,7 +115,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         entity_id=user.id,
         user_id=user.id,
         user_email=user.email,
-        organization_id=user.organization_id,  # membership-guard: ok (audit label only)
     )
     return issue_session(db, user)
 
@@ -123,6 +126,7 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
 
     user_id = f"usr_cand_{uuid.uuid4().hex[:8]}"
     cand_profile_id = f"cand_{uuid.uuid4().hex[:8]}"
+    set_tenant(db, user_id=user_id)  # the new account creates its own rows
 
     user = User(
         id=user_id,
@@ -179,7 +183,7 @@ def register_candidate(payload: RegisterCandidateRequest, db: Session = Depends(
 def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(get_db)):
     ensure_email_available(db, payload.email)
     account_service.validate_password(payload.password)
-    if db.query(Organization).filter(Organization.domain == payload.company_domain).first():
+    if dbf.domain_exists(db, payload.company_domain):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An organization with this domain already exists. Ask its admin for an invitation."
@@ -188,6 +192,7 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
     # Self-serve organizations start on the free plan; upgrades go through billing.
     plan = db.get(Plan, DEFAULT_SIGNUP_PLAN_ID)
     org_id = f"org_{uuid.uuid4().hex[:8]}"
+    set_tenant(db, org_id=org_id)  # the new organization creates its own rows
     org = Organization(
         id=org_id,
         name=payload.company_name,
@@ -214,6 +219,7 @@ def register_employer(payload: RegisterEmployerRequest, db: Session = Depends(ge
         is_active=True,
     )
     db.commit()
+    set_tenant(db, org_id=org_id, user_id=user.id)
     db.refresh(user)
 
     account_service.send_verification_email(db, user)
@@ -305,6 +311,7 @@ def switch_org(payload: SwitchOrgRequest, db: Session = Depends(get_db), current
     membership = membership_service.active_membership(db, current_user.id, payload.organization_id)
     if membership is None or not membership_service.is_org_usable(membership.organization):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have access to that organization")
+    set_tenant(db, org_id=membership.organization_id, user_id=current_user.id)
     log_audit_event(
         db=db, action="ORGANIZATION_SWITCHED", module="Auth", entity="Organization", entity_id=membership.organization_id,
         user_id=current_user.id, user_email=current_user.email, organization_id=membership.organization_id,

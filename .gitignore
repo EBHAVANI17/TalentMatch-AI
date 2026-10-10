@@ -34,3 +34,4 @@ web/test-results/
 Thumbs.db
 web/openapi.json
 backend/.cache/
+backend/scripts/bench_results/

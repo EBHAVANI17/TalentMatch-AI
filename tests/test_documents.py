@@ -5,7 +5,7 @@ import time
 import pytest
 
 from app.adapters.storage.local import LocalStorage
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import Document, Resume
 from app.services import document_service
 

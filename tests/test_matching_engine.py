@@ -3,7 +3,7 @@ import dataclasses
 
 import pytest
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.matching.engine import DEFAULT_WEIGHTS, CandidateFacts, JobFacts, score_match
 from app.matching.ontology import load_skill_graph
 

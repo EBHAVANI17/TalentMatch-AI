@@ -225,10 +225,12 @@ def ask(db: Session, ctx: TenantContext, *, message: str, conversation_id: Optio
         db.add(conv)
     db.add(CopilotMessage(
         id=f"cmsg_{uuid.uuid4().hex[:16]}", conversation_id=conv.id, role="user", content=question, created_at=now,
+        organization_id=conv.organization_id, user_id=conv.user_id,
         citations_json=json.dumps({r: book.entries[r] for r in refs_in(question) if r in valid}),
     ))
     reply = CopilotMessage(
         id=f"cmsg_{uuid.uuid4().hex[:16]}", conversation_id=conv.id, role="assistant", content=text,
+        organization_id=conv.organization_id, user_id=conv.user_id,
         created_at=now + timedelta(microseconds=1),
         citations_json=json.dumps({r: book.entries[r] for r in dict.fromkeys(cited)}),
         follow_ups_json=json.dumps(follow_ups), method=outcome.method,

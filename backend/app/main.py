@@ -19,6 +19,8 @@ configure_logging()
 async def lifespan(app: FastAPI):
     # Apply pending migrations, and seed demo data when DEMO_MODE is on
     init_db()
+    from app.core.database import check_database_roles
+    check_database_roles()  # the request role must not bypass row-level security (production refuses)
     yield
 
 app = FastAPI(

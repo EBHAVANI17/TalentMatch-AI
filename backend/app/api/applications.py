@@ -118,9 +118,9 @@ def apply_to_job(
     )
     db.add(app)
 
-    # Increment applicant count on job
-    job_any: Any = job
-    job_any.applicants_count = int(job_any.applicants_count or 0) + 1
+    # Applicant count is recomputed by the database (candidates can't update jobs under RLS)
+    from app.db.functions import refresh_applicants_count
+    refresh_applicants_count(db, job.id)
     emit(db, "application.created", organization_id=str(job.organization_id) if job.organization_id else None, actor=current_user, payload={
         "application_id": app_id, "job_id": job.id, "candidate_id": candidate.id,
         "match_score": score, "source": app.source,

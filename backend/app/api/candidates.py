@@ -1,5 +1,7 @@
+import io
 import re
 import json
+import zipfile
 from typing import List, Optional, Dict, Any
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
@@ -49,6 +51,19 @@ class ResumeParseResponse(BaseModel):
     matched_job_title: Optional[str] = None
     missing_skills_for_target: Optional[List[str]] = None
     tailoring_recommendations: Optional[List[str]] = None
+
+class BulkResumeParseItem(BaseModel):
+    file_name: str
+    status: str
+    error_message: Optional[str] = None
+    parsed: Optional[ResumeParseResponse] = None
+
+class BulkResumeParseResponse(BaseModel):
+    total_files_received: int
+    successful_count: int
+    failed_count: int
+    batch_summary: str
+    results: List[BulkResumeParseItem]
 
 def analyze_resume_text(
     text: str,
@@ -213,6 +228,129 @@ async def upload_resume(
         target_job_id=target_job_id,
         db=db
     )
+
+MAX_BULK_RESUMES = 50
+
+@router.post("/bulk-upload-resumes", response_model=BulkResumeParseResponse)
+async def bulk_upload_resumes(
+    files: List[UploadFile] = File(...),
+    target_job_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant)
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided for bulk upload.")
+
+    results: List[BulkResumeParseItem] = []
+    max_file_size = settings.max_upload_mb * 1024 * 1024
+
+    # Extract all candidate files (unpacking zip archives if present)
+    candidate_file_payloads: List[tuple[str, bytes]] = []
+
+    for upload_file in files:
+        filename = upload_file.filename or "resume.txt"
+        content = await upload_file.read()
+
+        if len(content) > max_file_size:
+            results.append(BulkResumeParseItem(
+                file_name=filename,
+                status="error",
+                error_message=f"File exceeds maximum size limit of {settings.max_upload_mb} MB"
+            ))
+            continue
+
+        # Check if the file is a ZIP archive
+        is_zip = filename.lower().endswith(".zip") or (content.startswith(b"PK\x03\x04") and zipfile.is_zipfile(io.BytesIO(content)))
+        if is_zip:
+            try:
+                with zipfile.ZipFile(io.BytesIO(content)) as z:
+                    for zip_info in z.infolist():
+                        if zip_info.is_dir():
+                            continue
+                        inner_name = zip_info.filename.replace("\\", "/").split("/")[-1]
+                        if not inner_name or inner_name.startswith(".") or inner_name.startswith("__MACOSX"):
+                            continue
+                        ext = inner_name.rsplit(".", 1)[-1].lower() if "." in inner_name else ""
+                        if ext not in {"pdf", "docx", "txt", "md", "json"}:
+                            continue
+                        
+                        inner_data = z.read(zip_info)
+                        if len(inner_data) > max_file_size:
+                            results.append(BulkResumeParseItem(
+                                file_name=inner_name,
+                                status="error",
+                                error_message=f"Archive file exceeds limit of {settings.max_upload_mb} MB"
+                            ))
+                            continue
+                        
+                        candidate_file_payloads.append((inner_name, inner_data))
+            except Exception as zip_err:
+                results.append(BulkResumeParseItem(
+                    file_name=filename,
+                    status="error",
+                    error_message=f"Failed to extract ZIP archive: {str(zip_err)}"
+                ))
+        else:
+            candidate_file_payloads.append((filename, content))
+
+    # Guard total count: enforce batch limit
+    if len(candidate_file_payloads) + len(results) > MAX_BULK_RESUMES:
+        remaining_slots = max(0, MAX_BULK_RESUMES - len(results))
+        for skipped_fname, _ in candidate_file_payloads[remaining_slots:]:
+            results.append(BulkResumeParseItem(
+                file_name=skipped_fname,
+                status="error",
+                error_message=f"Batch size limit of {MAX_BULK_RESUMES} resumes reached. File skipped."
+            ))
+        candidate_file_payloads = candidate_file_payloads[:remaining_slots]
+
+    for fname, data in candidate_file_payloads:
+        try:
+            text = extract_text(fname, data)
+            detected_format = fname.rsplit(".", 1)[-1].upper() if "." in fname else "TXT"
+            parsed = analyze_resume_text(
+                text=text,
+                detected_format=detected_format,
+                filename=fname,
+                file_size=len(data),
+                target_job_id=target_job_id,
+                db=db
+            )
+            results.append(BulkResumeParseItem(
+                file_name=fname,
+                status="success",
+                parsed=parsed
+            ))
+        except UnreadableDocument as exc:
+            results.append(BulkResumeParseItem(
+                file_name=fname,
+                status="error",
+                error_message=str(exc)
+            ))
+        except Exception as exc:
+            results.append(BulkResumeParseItem(
+                file_name=fname,
+                status="error",
+                error_message=f"Parsing error: {str(exc)}"
+            ))
+
+    successful_count = sum(1 for r in results if r.status == "success")
+    failed_count = sum(1 for r in results if r.status == "error")
+    total_received = len(results)
+
+    summary = (
+        f"Processed {total_received} resumes (batch limit: {MAX_BULK_RESUMES}). "
+        f"{successful_count} successfully parsed, {failed_count} errors."
+    )
+
+    return BulkResumeParseResponse(
+        total_files_received=total_received,
+        successful_count=successful_count,
+        failed_count=failed_count,
+        batch_summary=summary,
+        results=results
+    )
+
 
 def _can_edit(ctx: TenantContext, cand: CandidateProfile) -> bool:
     """The candidate themselves, a super admin, or the organization that sourced them."""

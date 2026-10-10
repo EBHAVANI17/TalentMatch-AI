@@ -169,8 +169,12 @@ def apply_profile_update(db: Session, cand: CandidateProfile, payload: Candidate
         "notice_period_days", "availability", "available_from", "is_searchable",
         "github_url", "linkedin_url", "portfolio_url",
     }
+    searchable_before = cand.is_searchable
     for field in simple & changes.keys():
         setattr(cand, field, changes[field])
+    if cand.is_searchable != searchable_before:
+        from app.matching.embeddings import sync_public_flag
+        sync_public_flag(db, cand)  # marketplace vectors are readable only while the profile is searchable
     if "remote_preference" in changes:
         pref = REMOTE_PREFERENCES.get((changes["remote_preference"] or "").lower())
         if not pref:
@@ -227,7 +231,8 @@ def apply_profile_update(db: Session, cand: CandidateProfile, payload: Candidate
 
 def create_sourced_candidate(db: Session, ctx: TenantContext, payload: SourcedCandidateCreate) -> CandidateProfile:
     email = payload.email.lower()
-    if db.query(User).filter(User.email == email).first():
+    from app.db.functions import email_exists  # accounts in other organizations aren't visible under RLS
+    if email_exists(db, email):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "This person already has a Talent Match account. Search the talent pool or ask them to apply.",

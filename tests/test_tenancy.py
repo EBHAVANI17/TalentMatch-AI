@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import CandidateProfile, Job, Notification, Organization, User
 
 

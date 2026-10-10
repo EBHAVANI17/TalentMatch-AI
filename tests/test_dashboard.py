@@ -1,5 +1,5 @@
 """Recruiter dashboard figures are real, tenant-scoped and consistent with the underlying records."""
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import Application, Job
 
 

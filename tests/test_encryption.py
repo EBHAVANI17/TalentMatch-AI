@@ -6,7 +6,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import text
 
 from app.core import crypto
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.db.rotate_encryption import rotate_all
 from app.core.security import hash_password
 from app.models.db_models import CandidateProfile, User

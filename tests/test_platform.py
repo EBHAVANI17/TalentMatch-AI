@@ -51,7 +51,7 @@ def test_database_is_at_latest_migration():
     from sqlalchemy import text
 
     from app.core.config import BACKEND_DIR
-    from app.core.database import engine
+    from app.core.database import owner_engine as engine  # alembic_version belongs to the owner
 
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
@@ -59,3 +59,25 @@ def test_database_is_at_latest_migration():
     with engine.connect() as conn:
         current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     assert current == head
+
+
+def test_production_requires_separate_database_roles():
+    pg = Settings(environment="production", jwt_secret_key="x" * 48, data_encryption_keys="k" * 44, demo_mode=False,
+                  cors_origins="https://app.example.com", database_url="postgresql+psycopg://talentmatch_app@db/tm",
+                  database_owner_url="", database_admin_url="", database_worker_url="")
+    with pytest.raises(RuntimeError) as exc:
+        pg.validate_for_runtime()
+    for name in ("DATABASE_OWNER_URL", "DATABASE_ADMIN_URL", "DATABASE_WORKER_URL"):
+        assert name in str(exc.value)
+
+
+def test_rls_switched_off_is_logged_loudly(monkeypatch, caplog):
+    import logging
+
+    from app.core import database
+
+    monkeypatch.setattr(database, "IS_SQLITE", False)
+    monkeypatch.setattr(database.settings, "rls_enforced", False)
+    with caplog.at_level(logging.CRITICAL, logger="app.core.database"):
+        database.check_database_roles()
+    assert any("RLS_ENFORCED=false" in r.getMessage() for r in caplog.records)

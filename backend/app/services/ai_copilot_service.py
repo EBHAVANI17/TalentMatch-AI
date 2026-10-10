@@ -250,7 +250,8 @@ def auto_screen_application_db(db: Session, application_id: str):
             title=f"AI Screening Complete: {job_title}",
             message=f"Your application at {org_name} was autonomous AI screened ({rec} • {score}% Match).",
             notif_type="ai",
-            link="/#applications"
+            link="/#applications",
+            organization_id=app.organization_id if app else None,
         )
 
     log_audit_event(
@@ -259,6 +260,7 @@ def auto_screen_application_db(db: Session, application_id: str):
         module="AI_Automation",
         entity="Application",
         entity_id=app.id if app else "app_mock",
+        organization_id=app.organization_id if app else None,
         details={"match_score": score, "recommendation": rec}
     )
 

@@ -19,8 +19,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.db import functions as dbf
 from app.models.db_models import AuditLog, Invitation, Membership, Organization, User, UserToken
 
 # Kept here (not imported from core.tenancy) so tenancy can import this module without a cycle.
@@ -56,11 +58,11 @@ def active_members(db: Session, org_id: str) -> List[Membership]:
 
 def seats_in_use(db: Session, org_id: str) -> int:
     members = db.query(Membership).filter(Membership.organization_id == org_id, Membership.status == ACTIVE).count()
-    pending = db.query(Invitation).filter(
+    pending = db.query(func.count(Invitation.id)).filter(
         Invitation.organization_id == org_id,
         Invitation.status == "pending",
         Invitation.expires_at > datetime.utcnow(),
-    ).count()
+    ).scalar() or 0
     return members + pending
 
 
@@ -94,6 +96,9 @@ def sync_default(db: Session, user: User) -> None:
     """Point users.organization_id/role at a valid active membership: keep the current default
     if it's still active, otherwise use the oldest active membership; clear it if there is none."""
     if user.role in PLATFORM_ROLES:
+        return
+    if dbf.sync_default_org(db, user.id):  # under RLS the database recomputes it (other users' rows)
+        db.expire(user, ["organization_id", "role"])
         return
     db.flush()  # sessions don't autoflush; the query below must see pending changes
     actives = (
@@ -190,14 +195,54 @@ def add_member(db: Session, *, org: Organization, user: User, role: str, actor: 
     return membership
 
 
+def add_member_by_id(db: Session, *, org: Organization, user_id: str, account_role: str, role: str,
+                     actor: Optional[User], via_parent: bool = False) -> Membership:
+    """Adds an existing account found by email. Under RLS the account becomes visible to this
+    organization only once the membership exists, so the row is written first."""
+    _require_org_role(role)
+    if account_role in PLATFORM_ROLES:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Platform admin and candidate accounts can't join an organization")
+    existing = db.query(Membership).filter(Membership.user_id == user_id, Membership.organization_id == org.id).first()
+    if existing is not None:
+        user = db.get(User, user_id)
+        return add_member(db, org=org, user=user, role=role, actor=actor, via_parent=via_parent)
+    if not is_org_usable(org):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Organization is not active")
+    _check_seats(db, org)
+    membership = Membership(id=f"mem_{uuid.uuid4().hex[:16]}", user_id=user_id, organization_id=org.id,
+                            role=role, status=ACTIVE)
+    db.add(membership)
+    db.flush()
+    user = db.get(User, user_id)
+    sync_default(db, user)
+    _audit(db, actor, "MEMBERSHIP_CREATED", membership, via_parent=via_parent,
+           self_added=bool(actor and actor.id == user_id))
+    return membership
+
+
 def create_org_user(db: Session, *, org: Organization, role: str, actor: Optional[User] = None,
                     check_seats: bool = True, **user_fields) -> User:
     """A new staff account whose first membership is in `org` (sign-up, accepted invitation)."""
     _require_org_role(role)
-    user = User(id=f"usr_{uuid.uuid4().hex[:10]}", role=role, organization_id=org.id, **user_fields)
-    db.add(user)
+    if not is_org_usable(org):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Organization is not active")
+    if check_seats:
+        _check_seats(db, org)
+    user_id = f"usr_{uuid.uuid4().hex[:10]}"
     db.flush()
-    add_member(db, org=org, user=user, role=role, actor=actor or user, check_seats=check_seats, make_default=True)
+    # Staff rows can't be inserted directly under row-level security (only candidate rows can)
+    dbf.create_staff_user(
+        db, id=user_id, email=user_fields["email"], hashed_password=user_fields["hashed_password"],
+        full_name=user_fields["full_name"], role=role, organization_id=org.id,
+        email_verified=bool(user_fields.get("email_verified", False)), avatar_url=user_fields.get("avatar_url", ""),
+    )
+    membership = Membership(id=f"mem_{uuid.uuid4().hex[:16]}", user_id=user_id, organization_id=org.id,
+                            role=role, status=ACTIVE)
+    db.add(membership)
+    db.flush()
+    user = db.get(User, user_id)
+    _audit(db, actor or user, "MEMBERSHIP_CREATED", membership, via_parent=False, self_added=actor is None)
     return user
 
 
@@ -247,6 +292,8 @@ def remove(db: Session, membership: Membership, actor: Optional[User], via_paren
 
 def _revoke_org_sessions(db: Session, user_id: str, org_id: str) -> None:
     """Refresh tokens working in this organization stop working (access tokens fail the membership check)."""
+    if dbf.revoke_org_sessions(db, user_id, org_id):  # other users' tokens: through the database under RLS
+        return
     db.query(UserToken).filter(
         UserToken.user_id == user_id, UserToken.purpose == "refresh",
         UserToken.organization_id == org_id, UserToken.used_at.is_(None),

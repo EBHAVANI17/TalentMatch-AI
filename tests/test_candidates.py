@@ -1,7 +1,7 @@
 """Candidate profiles: self-service editing, contact privacy, search, sourcing and recruiter notes."""
 import uuid
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import CandidateSkill, User
 
 
@@ -157,3 +157,50 @@ def test_recruiter_notes_are_private_to_the_organization(client, auth):
     edited = client.patch(f"/api/v1/candidates/cand_001/notes/{note['id']}", headers=anthropic, json={"body": "Updated"})
     assert edited.json()["body"] == "Updated"
     assert client.delete(f"/api/v1/candidates/cand_001/notes/{note['id']}", headers=anthropic).status_code == 204
+
+
+def test_bulk_resume_upload_multiple_files_and_zip(client, auth):
+    import io
+    import zipfile
+
+    headers = auth("stripe")
+
+    # 1. Multi-file upload
+    resume1 = b"Alex River\nSenior Distributed Systems Engineer\nSkills: Python, Go, Docker, Kubernetes\nExperience: 7 years\nEngineered distributed key-value cache reducing latency by 45%.\nEmail: alex@example.com"
+    resume2 = b"Priya Patel\nFull Stack AI Engineer\nSkills: TypeScript, React, PyTorch, FastAPI\nExperience: 5 years\nArchitected end-to-end vector search pipeline serving 10k QPS.\nEmail: priya@example.com"
+
+    files = [
+        ("files", ("resume_alex.txt", resume1, "text/plain")),
+        ("files", ("resume_priya.txt", resume2, "text/plain")),
+    ]
+
+    res = client.post("/api/v1/candidates/bulk-upload-resumes", headers=headers, files=files)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["total_files_received"] == 2
+    assert data["successful_count"] == 2
+    assert data["failed_count"] == 0
+    names = [r["parsed"]["name"] for r in data["results"]]
+    assert "Alex River" in names
+    assert "Priya Patel" in names
+
+    # 2. ZIP archive upload containing multiple resumes and 1 unreadable file
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as z:
+        z.writestr("candidate1.txt", resume1)
+        z.writestr("candidate2.txt", resume2)
+        z.writestr("corrupted.txt", b"x")
+
+    zip_buffer.seek(0)
+    zip_files = [
+        ("files", ("resumes_batch.zip", zip_buffer.getvalue(), "application/zip"))
+    ]
+
+    res_zip = client.post("/api/v1/candidates/bulk-upload-resumes", headers=headers, files=zip_files)
+    assert res_zip.status_code == 200, res_zip.text
+    zip_data = res_zip.json()
+    assert zip_data["total_files_received"] == 3
+    assert zip_data["successful_count"] == 2
+    assert zip_data["failed_count"] == 1
+    assert any(r["status"] == "error" for r in zip_data["results"])
+

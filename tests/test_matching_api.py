@@ -1,7 +1,7 @@
 """Talent Match API: ranking, explanations, decisions, weights, candidate job matches, discovery."""
 import uuid
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import Application, Match, Notification, OutboxEvent
 
 URL = "/api/v1/matching/jobs/job_001/candidates"

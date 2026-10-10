@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.events import bus
 from app.models.db_models import Application, ApplicationStageHistory, Notification, OutboxEvent, PipelineStage
 
@@ -172,3 +172,20 @@ def test_pipeline_rules(client, auth):
     # Candidates can read stage names but not change them
     headers, _ = _new_candidate(client)
     assert client.put("/api/v1/pipeline/stages", headers=headers, json={"stages": two_hired}).status_code == 403
+
+
+def test_event_whose_payload_names_another_org_is_dead_lettered():
+    """Workers trust the outbox row's organization_id, never the payload."""
+    from app.models.db_models import EventDeadLetter
+
+    event_id = f"evt_{uuid.uuid4().hex[:12]}"
+    with SessionLocal() as db:
+        db.add(OutboxEvent(id=event_id, type="application.created", organization_id="org_anthropic",
+                           payload_json='{"organization_id": "org_stripe", "application_id": "app_x"}'))
+        db.commit()
+    bus.dispatch_ids([event_id])
+    with SessionLocal() as db:
+        record = db.get(OutboxEvent, event_id)
+        assert record.dispatched_at is None and record.attempts == bus.MAX_ATTEMPTS
+        dead = db.query(EventDeadLetter).filter(EventDeadLetter.event_id == event_id).one()
+        assert "does not match" in dead.reason and dead.organization_id == "org_anthropic"

@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # seed and reference data run as talentmatch_admin
 from app.core.security import hash_password
 from app.db.migrations import run_migrations
 from app.db.reference_data import ensure_reference_data

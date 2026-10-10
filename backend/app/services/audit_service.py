@@ -1,8 +1,12 @@
+import logging
 import json
 import uuid
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.db_models import AuditLog
+
+logger = logging.getLogger(__name__)
+
 
 def log_audit_event(
     db: Session,
@@ -31,6 +35,6 @@ def log_audit_event(
         )
         db.add(audit)
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
-        print(f"Audit log failed: {e}")
+        logger.exception("Audit log write failed (action=%s, organization=%s)", action, organization_id)

@@ -61,14 +61,15 @@ def download_content(
     """Target of signed links for local storage. The signature is the authorization."""
     if not document_service.verify_signature(document_id, expires, signature):
         raise HTTPException(status_code=403, detail="This download link is invalid or has expired")
-    document = db.get(Document, document_id)
+    from app.db.functions import document_for_signed_download  # no session here: the signature authorizes
+    document = document_for_signed_download(db, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return Response(
-        content=get_storage().get(document.storage_key),
-        media_type=document.content_type,
+        content=get_storage().get(document["storage_key"]),
+        media_type=document["content_type"],
         headers={
-            "Content-Disposition": f'attachment; filename="{document.filename}"',
+            "Content-Disposition": f'attachment; filename="{document["filename"]}"',
             "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
         },

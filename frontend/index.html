@@ -3980,11 +3980,11 @@
                   <i data-lucide="upload-cloud" style="width:24px;height:24px"></i>
                 </div>
                 <div>
-                  <div style="font-weight:700;font-size:0.92rem;margin-bottom:4px">Upload Resume File</div>
-                  <div style="font-size:0.78rem;color:var(--text-muted)">Supports PDF, TXT, DOCX, Markdown (Max 10MB)</div>
+                  <div style="font-weight:700;font-size:0.92rem;margin-bottom:4px">Upload Resumes or ZIP Archive (Bulk & Single)</div>
+                  <div style="font-size:0.78rem;color:var(--text-muted)">Supports PDF, TXT, DOCX, Markdown, or .ZIP with multiple resumes (Max 10MB per file, up to 50 resumes)</div>
                 </div>
-                <input type="file" id="resume-file-input" style="display:none" accept=".pdf,.txt,.docx,.md" onchange="handleResumeFileUpload(event)" />
-                <button type="button" class="btn btn-secondary btn-sm" style="pointer-events:none">Browse File</button>
+                <input type="file" id="resume-file-input" style="display:none" accept=".pdf,.txt,.docx,.md,.zip" multiple onchange="handleResumeFileUpload(event)" />
+                <button type="button" class="btn btn-secondary btn-sm" style="pointer-events:none">Browse Files</button>
               </div>
 
               <div class="form-divider">or paste resume text</div>
@@ -4092,63 +4092,125 @@
     }
 
     async function handleResumeFileUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
       const resultEl = document.getElementById('resume-result');
-      resultEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Running multi-tier OCR and ATS parser...</div>';
+      const isBulk = files.length > 1 || files[0].name.toLowerCase().endsWith('.zip');
+      
+      resultEl.innerHTML = `
+        <div class="loading-state">
+          <div class="spinner"></div>
+          ${isBulk ? `Processing batch of ${files.length} file(s) / archive...` : 'Running multi-tier OCR and ATS parser...'}
+        </div>
+      `;
 
-      const formData = new FormData();
-      formData.append('file', file);
-      const candidates = await api('/candidates').catch(() => []);
-      const me = candidates.find(c => c.email === state.user.email) || candidates[0];
-      if (me) formData.append('candidate_id', me.id);
       const targetJobId = document.getElementById('resume-target-job')?.value;
+      const formData = new FormData();
       if (targetJobId) formData.append('target_job_id', targetJobId);
 
       try {
         const headers = {};
         if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-        const res = await fetch(`${API}/resumes/upload`, {
-          method: 'POST',
-          headers,
-          body: formData
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(err.detail || 'Resume analysis failed');
-        }
-        const data = await res.json();
-        const analysis = data.latest_analysis || data;
 
-        resultEl.innerHTML = `
-          <div class="card" style="margin-top:16px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-              <h3 style="font-family:var(--font-display);font-weight:700">Analysis for ${file.name}</h3>
-              <span class="badge badge-emerald">Verified Ingestion</span>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-              ${infoTile('ATS Match', (analysis.ats_compatibility_score || 88) + '%', 'emerald')}
-              ${infoTile('Quality Score', (analysis.overall_quality_score || 92) + '%', 'indigo')}
-            </div>
-            ${analysis.findings ? `
-              <div style="margin-bottom:14px">
-                <div class="form-label">ATS Findings & Formatting Rubric</div>
-                <ul style="padding-left:18px;font-size:0.84rem;color:var(--text-secondary);line-height:1.7">
-                  ${analysis.findings.map(f => `<li>${f}</li>`).join('')}
-                </ul>
+        if (isBulk) {
+          files.forEach(f => formData.append('files', f));
+          const res = await fetch(`${API}/candidates/bulk-upload-resumes`, {
+            method: 'POST',
+            headers,
+            body: formData
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Bulk upload failed' }));
+            throw new Error(err.detail || 'Bulk resume processing failed');
+          }
+          const data = await res.json();
+          resultEl.innerHTML = `
+            <div class="card" style="margin-top:16px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <h3 style="font-family:var(--font-display);font-weight:700">Bulk Ingestion Results</h3>
+                <span class="badge badge-indigo">${data.successful_count}/${data.total_files_received} Parsed</span>
               </div>
-            ` : ''}
-            ${analysis.recommendations ? `
-              <div>
-                <div class="form-label">Strategic Optimizations</div>
-                <ul style="padding-left:18px;font-size:0.84rem;color:var(--accent-indigo);line-height:1.7">
-                  ${analysis.recommendations.map(r => `<li>${r}</li>`).join('')}
-                </ul>
+              <p style="font-size:0.84rem;color:var(--text-secondary);margin-bottom:16px">${data.batch_summary}</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                ${infoTile('Successful', data.successful_count + ' Resumes', 'emerald')}
+                ${infoTile('Errors / Skipped', data.failed_count + ' Files', data.failed_count > 0 ? 'rose' : 'cyan')}
               </div>
-            ` : ''}
-          </div>
-        `;
-        showToast('Resume parsed and analyzed successfully!', 'success');
+              <div style="display:flex;flex-direction:column;gap:12px">
+                ${data.results.map(r => `
+                  <div style="padding:14px;border-radius:var(--radius-md);background:var(--bg-input);border:1px solid var(--border-base)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                      <strong style="font-size:0.88rem;color:var(--text-primary)">
+                        ${r.status === 'success' ? (r.parsed?.name || r.file_name) : r.file_name}
+                      </strong>
+                      <span class="badge ${r.status === 'success' ? 'badge-emerald' : 'badge-rose'}" style="font-size:0.75rem">
+                        ${r.status === 'success' ? `${r.parsed?.ats_score || 85}% ATS` : 'Error'}
+                      </span>
+                    </div>
+                    ${r.status === 'success' && r.parsed ? `
+                      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:6px">
+                        ${r.parsed.extracted_title} &bull; ${r.parsed.extracted_experience_years} yrs exp &bull; ${r.parsed.extracted_location}
+                      </div>
+                      <div class="skill-tags" style="margin-top:6px">
+                        ${(r.parsed.extracted_skills || []).slice(0, 6).map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                      </div>
+                    ` : `
+                      <div style="font-size:0.8rem;color:var(--accent-rose)">${r.error_message || 'Could not parse document'}</div>
+                    `}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+          showToast(`Bulk processing complete: ${data.successful_count} parsed successfully!`, 'success');
+        } else {
+          const file = files[0];
+          formData.append('file', file);
+          const candidates = await api('/candidates').catch(() => []);
+          const me = candidates.find(c => c.email === state.user.email) || candidates[0];
+          if (me) formData.append('candidate_id', me.id);
+
+          const res = await fetch(`${API}/resumes/upload`, {
+            method: 'POST',
+            headers,
+            body: formData
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+            throw new Error(err.detail || 'Resume analysis failed');
+          }
+          const data = await res.json();
+          const analysis = data.latest_analysis || data;
+
+          resultEl.innerHTML = `
+            <div class="card" style="margin-top:16px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <h3 style="font-family:var(--font-display);font-weight:700">Analysis for ${file.name}</h3>
+                <span class="badge badge-emerald">Verified Ingestion</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                ${infoTile('ATS Match', (analysis.ats_compatibility_score || 88) + '%', 'emerald')}
+                ${infoTile('Quality Score', (analysis.overall_quality_score || 92) + '%', 'indigo')}
+              </div>
+              ${analysis.findings ? `
+                <div style="margin-bottom:14px">
+                  <div class="form-label">ATS Findings & Formatting Rubric</div>
+                  <ul style="padding-left:18px;font-size:0.84rem;color:var(--text-secondary);line-height:1.7">
+                    ${analysis.findings.map(f => `<li>${f}</li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+              ${analysis.recommendations ? `
+                <div>
+                  <div class="form-label">Strategic Optimizations</div>
+                  <ul style="padding-left:18px;font-size:0.84rem;color:var(--accent-indigo);line-height:1.7">
+                    ${analysis.recommendations.map(r => `<li>${r}</li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+            </div>
+          `;
+          showToast('Resume parsed and analyzed successfully!', 'success');
+        }
         lucide.createIcons();
       } catch(err) {
         resultEl.innerHTML = `<div class="form-error">${err.message}</div>`;

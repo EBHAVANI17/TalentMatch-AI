@@ -2,7 +2,7 @@
 import contextlib
 import uuid
 
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import Job, JobSkill, Organization, OutboxEvent
 
 

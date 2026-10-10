@@ -6,7 +6,7 @@ import pytest
 
 from app.adapters.email import get_email_sender
 from app.core import security
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.models.db_models import Organization, User
 
 

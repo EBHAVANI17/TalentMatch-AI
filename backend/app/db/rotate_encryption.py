@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.crypto import PROTECTED_FIELDS, rotate_value
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # every tenant's rows: talentmatch_admin
 
 logger = logging.getLogger(__name__)
 

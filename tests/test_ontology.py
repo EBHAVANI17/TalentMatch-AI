@@ -1,5 +1,5 @@
 """Skill ontology: synonyms, compound skills and directional related-skill credit."""
-from app.core.database import SessionLocal
+from app.core.database import AdminSessionLocal as SessionLocal  # test setup bypasses RLS
 from app.db.reference_data import ensure_reference_data
 from app.matching.ontology import load_skill_graph
 from app.models.db_models import SkillAlias, SkillRelation, SkillTaxonomy
